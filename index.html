@@ -187,8 +187,6 @@ function App() {
   const z = ZONAS[zona];
   const cpoCOP = PRECIOS_CPO[anio];
 
-  if (!auth) return <Login onLogin={() => setAuth(true)} />;
-
   const [finca, setFinca] = useLocalStorage("palma_finca2", { area: 200, enProduccion: false, precioTierra: 18000000, estab: 18000000, riego: 14000000, manoObra: 2500000, insumos: 1800000, asistTec: 400000, admin: 600000, cosechaTon: 35000, transpTon: 15000, dPrecio: 1, dProd: 1, trm: 4200, wacc: 0.12 });
   const [nucleos, setNucleos] = useLocalStorage("palma_nuc2", [{ id: 1, nombre: "Núcleo Cesar", ha: 3000, start: 0 }, { id: 2, nombre: "Núcleo Magdalena", ha: 5000, start: 2 }, { id: 3, nombre: "Núcleo Aracataca", ha: 4000, start: 4 }]);
   const [ext, setExt] = useLocalStorage("palma_ext2", { capacidad: 30, capex: 35000000000, tarifa: 180000, opexTon: 120000, pctTerceros: 0.5 });
@@ -221,6 +219,8 @@ function App() {
   const tabsSimple = [["inicio", "Inicio"], ["finca", "Evaluar finca"], ["empresa", "Mi empresa"], ["glosario", "Glosario"]];
   const tabsAvz = [["inicio", "Inicio"], ["finca", "Evaluar finca"], ["extractora", "Extractora"], ["empresa", "Mi empresa"], ["capital", "Capital y salida"], ["glosario", "Glosario"]];
   const tabs = modo === "simple" ? tabsSimple : tabsAvz;
+
+  if (!auth) return <Login onLogin={() => setAuth(true)} />;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'Inter', system-ui, sans-serif", padding: "22px 20px 60px" }}>
