@@ -494,7 +494,7 @@ function App(){
                     :<>La <Term def={GLOSARIO.TIR}>TIR</Term> es <b style={{color:saludColor}}>{fmtPct(tirF)}</b>
                       {tirF>=finca.wacc
                         ?<>, sobre el mínimo del {fmtPct(finca.wacc)} — <b style={{color:C.frond}}>el proyecto crea valor</b>.</>
-                        ?<>, bajo el mínimo del {fmtPct(finca.wacc)} — <b style={{color:C.red}}>conviene renegociar el precio</b>.</>
+                        :<>, bajo el mínimo del {fmtPct(finca.wacc)} — <b style={{color:C.red}}>conviene renegociar el precio</b>.</>
                       }
                       {breakEvenCOP&&<> El precio del aceite puede caer hasta <b style={{color:C.gold}}>{fmtCOP(breakEvenCOP)}/t</b> (margen del {fmtPct(margenPrecio)}) antes de que deje de ser atractivo.</>}
                     </>
