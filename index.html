@@ -14,6 +14,9 @@
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect } = React;
 
+const CLAVE = "gvc2026";
+const PRECIOS_CPO = { 2022: 4200000, 2023: 3800000, 2024: 3600000, 2025: 4100000, 2026: 4539376 };
+const CESION_COP = 84000; // ~USD 20 × TRM 4200
 
 function useLocalStorage(key, initial) {
   const [val, setVal] = useState(() => { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : initial; } catch { return initial; } });
@@ -28,14 +31,13 @@ const ZONAS = {
   Central: { rffPico: 23, tea: 0.200, costoTon: 485000, riego: 10000000, nota: "Afectación histórica por Pudrición del Cogollo; exige material resistente." },
   Suroccidental: { rffPico: 25, tea: 0.235, costoTon: 460000, riego: 8000000, nota: "Predomina el híbrido OxG, con récord reciente de productividad." },
 };
-const CPO_BASE = 900, CESION = 20;
 function curva(rffPico) { return [0, 0, rffPico * 0.14, rffPico * 0.43, rffPico * 0.71, rffPico * 0.89, ...Array(19).fill(rffPico)]; }
-const precioRFF = (dP, trm, tea) => (CPO_BASE * dP * 1.05 * trm - CESION * trm) * tea;
-const precioCPOt = (dP, trm) => CPO_BASE * dP * 1.05 * trm;
+const precioRFF = (cpoCOP, dP, tea) => (cpoCOP * dP * 1.05 - CESION_COP) * tea;
+const precioCPOt = (cpoCOP, dP) => cpoCOP * dP * 1.05;
 
 // ============ MOTOR ============
-function flujoFinca(f, zona) {
-  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const p = precioRFF(f.dPrecio, f.trm, z.tea); const cf = [];
+function flujoFinca(f, zona, cpoCOP) {
+  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const p = precioRFF(cpoCOP, f.dPrecio, z.tea); const cf = [];
   const fijoOp = f.manoObra + f.insumos + f.asistTec + f.admin;
   for (let y = 0; y < 25; y++) {
     const prod = (f.enProduccion ? z.rffPico : prod0[y]) * f.dProd;
@@ -49,8 +51,8 @@ function flujoFinca(f, zona) {
 function irr(cf) { let lo = -0.9, hi = 2; const f = (r) => cf.reduce((s, c, i) => s + c / Math.pow(1 + r, i), 0); if (f(lo) * f(hi) > 0) return null; for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2, v = f(m); if (Math.abs(v) < 1) return m; if (f(lo) * v < 0) hi = m; else lo = m; } return (lo + hi) / 2; }
 const npv = (cf, r) => cf.reduce((s, c, i) => s + c / Math.pow(1 + r, i), 0);
 const payback = (cf) => { let a = 0; for (let i = 0; i < cf.length; i++) { a += cf[i]; if (a >= 0) return i + 1; } return null; };
-function nucleoCal(ha, sy, H, dProd, dPrecio, trm, zona) {
-  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const prff = precioRFF(dPrecio, trm, z.tea);
+function nucleoCal(ha, sy, H, dProd, dPrecio, zona, cpoCOP) {
+  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const prff = precioRFF(cpoCOP, dPrecio, z.tea);
   const rff = Array(H).fill(0), cf = Array(H).fill(0), haProd = Array(H).fill(0);
   const fijo = z.costoTon; // aprox por t
   for (let t = 0; t < 25; t++) { const c = sy + t; if (c >= H) break; const prod = prod0[t] * dProd; rff[c] += prod * ha; if (t >= 3) haProd[c] += ha; cf[c] += (prod * prff - prod * fijo) * ha - (t === 0 ? (18000000 + z.riego) * ha : 0); }
@@ -142,11 +144,50 @@ function BarLineChart({ series, accLine, labels, height = 230 }) {
   );
 }
 
+function Login({ onLogin }) {
+  const [val, setVal] = useState("");
+  const [err, setErr] = useState(false);
+  const intentar = () => { if (val === CLAVE) { onLogin(); } else { setErr(true); setTimeout(() => setErr(false), 1400); } };
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 18, padding: "40px 36px", width: "100%", maxWidth: 360, display: "flex", flexDirection: "column", gap: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: C.gold, display: "flex", alignItems: "center", justifyContent: "center", color: "#08130F", fontFamily: "'Archivo', sans-serif", fontWeight: 800, fontSize: 16 }}>GVC</div>
+          <div>
+            <div style={{ fontFamily: "'Archivo', sans-serif", fontWeight: 800, fontSize: 22, lineHeight: 1 }}>GVC Capital</div>
+            <div style={{ fontSize: 11, color: C.gold, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 2 }}>Inteligencia palmera</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: C.dim, lineHeight: 1.6 }}>Herramienta interna. Ingresa la clave de acceso para continuar.</div>
+        <div>
+          <input
+            type="password"
+            placeholder="Clave de acceso"
+            value={val}
+            onChange={(e) => setVal(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && intentar()}
+            className="num-in"
+            style={{ fontSize: 15, padding: "11px 14px", border: `1px solid ${err ? C.red : C.line}`, transition: "border 0.2s" }}
+            autoFocus
+          />
+          {err && <div style={{ fontSize: 11, color: C.red, marginTop: 6 }}>Clave incorrecta.</div>}
+        </div>
+        <button onClick={intentar} style={{ background: C.gold, color: "#08130F", border: "none", borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: 0.3 }}>Entrar</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  const [auth, setAuth] = useLocalStorage("palma_auth", false);
   const [tab, setTab] = useState("inicio");
   const [modo, setModo] = useLocalStorage("palma_modo", "simple");
   const [zona, setZona] = useLocalStorage("palma_zona", "Norte");
+  const [anio, setAnio] = useLocalStorage("palma_anio", 2026);
   const z = ZONAS[zona];
+  const cpoCOP = PRECIOS_CPO[anio];
+
+  if (!auth) return <Login onLogin={() => setAuth(true)} />;
 
   const [finca, setFinca] = useLocalStorage("palma_finca2", { area: 200, enProduccion: false, precioTierra: 18000000, estab: 18000000, riego: 14000000, manoObra: 2500000, insumos: 1800000, asistTec: 400000, admin: 600000, cosechaTon: 35000, transpTon: 15000, dPrecio: 1, dProd: 1, trm: 4200, wacc: 0.12 });
   const [nucleos, setNucleos] = useLocalStorage("palma_nuc2", [{ id: 1, nombre: "Núcleo Cesar", ha: 3000, start: 0 }, { id: 2, nombre: "Núcleo Magdalena", ha: 5000, start: 2 }, { id: 3, nombre: "Núcleo Aracataca", ha: 4000, start: 4 }]);
@@ -160,13 +201,13 @@ function App() {
   // Al cambiar zona, sincronizar riego de la finca con la referencia de la zona
   useEffect(() => { setFinca((p) => ({ ...p, riego: z.riego })); }, [zona]);
 
-  const cfF = useMemo(() => flujoFinca(finca, zona), [finca, zona]);
+  const cfF = useMemo(() => flujoFinca(finca, zona, cpoCOP), [finca, zona, cpoCOP]);
   const tirF = irr(cfF), vanF = npv(cfF, finca.wacc), pbF = payback(cfF), invF = -cfF[0];
 
   const H = 15;
-  const port = useMemo(() => { const rff = Array(H).fill(0), cult = Array(H).fill(0), haProd = Array(H).fill(0); nucleos.forEach((n) => { const r = nucleoCal(n.ha, n.start, H, finca.dProd, finca.dPrecio, finca.trm, zona); for (let c = 0; c < H; c++) { rff[c] += r.rff[c]; cult[c] += r.cf[c]; haProd[c] += r.haProd[c]; } }); return { rff, cult, haProd }; }, [nucleos, finca.dProd, finca.dPrecio, finca.trm, zona]);
+  const port = useMemo(() => { const rff = Array(H).fill(0), cult = Array(H).fill(0), haProd = Array(H).fill(0); nucleos.forEach((n) => { const r = nucleoCal(n.ha, n.start, H, finca.dProd, finca.dPrecio, zona, cpoCOP); for (let c = 0; c < H; c++) { rff[c] += r.rff[c]; cult[c] += r.cf[c]; haProd[c] += r.haProd[c]; } }); return { rff, cult, haProd }; }, [nucleos, finca.dProd, finca.dPrecio, zona, cpoCOP]);
   const haTot = nucleos.reduce((a, n) => a + n.ha, 0);
-  const extr = useMemo(() => { const rffT = port.rff.map((x) => x * ext.pctTerceros); const pCPO = precioCPOt(finca.dPrecio, finca.trm), pPK = pCPO * 0.6, pComp = precioRFF(1, 4200, z.tea); const eb = Array(H).fill(0); for (let c = 0; c < H; c++) { const mp = port.rff[c] * ext.tarifa; const aT = rffT[c] * z.tea * pCPO + rffT[c] * 0.05 * pPK; eb[c] = mp + aT - rffT[c] * pComp - rffT[c] * ext.opexTon; } return { eb }; }, [port, ext, finca.dPrecio, finca.trm, zona]);
+  const extr = useMemo(() => { const rffT = port.rff.map((x) => x * ext.pctTerceros); const pCPO = precioCPOt(cpoCOP, finca.dPrecio), pPK = pCPO * 0.6, pComp = precioRFF(cpoCOP, 1, z.tea); const eb = Array(H).fill(0); for (let c = 0; c < H; c++) { const mp = port.rff[c] * ext.tarifa; const aT = rffT[c] * z.tea * pCPO + rffT[c] * 0.05 * pPK; eb[c] = mp + aT - rffT[c] * pComp - rffT[c] * ext.opexTon; } return { eb }; }, [port, ext, finca.dPrecio, zona, cpoCOP]);
   const consol = useMemo(() => port.cult.map((c, i) => c + extr.eb[i]), [port, extr]);
   const ebitdaRegimen = consol[H - 1];
   const valEbitda = ebitdaRegimen * cap.multiplo, valHa = haTot * cap.evHa * finca.trm, evFinal = Math.max(valEbitda, valHa);
@@ -211,11 +252,18 @@ function App() {
               </select>
             </div>
             <div>
+              <div style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Precio CPO</div>
+              <select className="zona" value={anio} onChange={(e) => setAnio(Number(e.target.value))}>
+                {Object.keys(PRECIOS_CPO).map((a) => <option key={a} value={a}>{a} · {fmtCOP(PRECIOS_CPO[a])}/t</option>)}
+              </select>
+            </div>
+            <div>
               <div style={{ fontSize: 9, color: C.dim, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>Modo</div>
               <div style={{ display: "flex", border: `1px solid ${C.line}`, borderRadius: 8, overflow: "hidden" }}>
                 {["simple", "avanzado"].map((m) => <button key={m} onClick={() => setModo(m)} style={{ background: modo === m ? C.gold : "transparent", color: modo === m ? "#08130F" : C.dim, border: "none", padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize" }}>{m}</button>)}
               </div>
             </div>
+            <button onClick={() => setAuth(false)} title="Cerrar sesión" style={{ background: "transparent", border: `1px solid ${C.line}`, color: C.dim, borderRadius: 8, padding: "8px 10px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", alignSelf: "flex-end" }}>Salir</button>
           </div>
         </div>
 
@@ -239,7 +287,7 @@ function App() {
               <KPI label="Rendimiento pico" value={`${z.rffPico} t/ha`} accent={C.gold} hint="RFF en etapa adulta" />
               <KPI label="Tasa de extracción" value={fmtPct(z.tea)} hint="aceite por racimo" />
               <KPI label="Costo de referencia" value={`${fmtFull(z.costoTon)}`} hint="COP por t RFF · ICPA" />
-              <KPI label="Precio aceite base" value="USD 900" accent={C.frond} hint="por tonelada CPO" />
+              <KPI label={`Precio CPO ${anio}`} value={fmtCOP(cpoCOP)} accent={C.frond} hint={`COP/t · FEP ${anio}`} />
             </div>
             <div className="grid2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               {[["Evaluar finca", "Pon los números de una finca real —precio de la hectárea, empleados, riego, insumos— y la herramienta te dice si comprarla conviene, con un veredicto claro."],
@@ -288,7 +336,7 @@ function App() {
                 <NumField label="Cosecha (COP/tonelada)" value={finca.cosechaTon} onChange={setF("cosechaTon")} />
                 <NumField label="Transporte (COP/tonelada)" value={finca.transpTon} onChange={setF("transpTon")} /></>}
               <div style={{ borderTop: `1px solid ${C.line}`, margin: "14px 0", paddingTop: 14 }} />
-              <Slider label="Precio del aceite (CPO)" sub={`USD ${(CPO_BASE * finca.dPrecio).toFixed(0)}/t · base 900`} value={finca.dPrecio} min={0.6} max={1.5} step={0.01} onChange={setF("dPrecio")} format={(v) => `×${v.toFixed(2)}`} />
+              <Slider label={`Precio CPO (base ${anio})`} sub={`${fmtCOP(cpoCOP * finca.dPrecio)}/t · ref. FEP ${anio}`} value={finca.dPrecio} min={0.6} max={1.5} step={0.01} onChange={setF("dPrecio")} format={(v) => `×${v.toFixed(2)}`} />
               <Slider label="Productividad" sub={`pico ${(z.rffPico * finca.dProd).toFixed(1)} t RFF/ha`} value={finca.dProd} min={0.6} max={1.3} step={0.01} onChange={setF("dProd")} format={(v) => `×${v.toFixed(2)}`} />
               {modo === "avanzado" && <Slider label="Costo de oportunidad" value={finca.wacc} min={0.06} max={0.2} step={0.005} onChange={setF("wacc")} format={fmtPct} />}
             </div>
