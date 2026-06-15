@@ -15,7 +15,7 @@
 const { useState, useMemo, useEffect } = React;
 
 const PRECIOS_CPO = { 2022: 4200000, 2023: 3800000, 2024: 3600000, 2025: 4100000, 2026: 4539376 };
-const CESION_COP = 84000;
+const CESION_COP  = 84000;
 
 function useLocalStorage(key, initial) {
   const [val, setVal] = useState(() => { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : initial; } catch { return initial; } });
@@ -24,131 +24,133 @@ function useLocalStorage(key, initial) {
 }
 
 const ZONAS = {
-  Norte:         { rffPico: 24, tea: 0.205, costoTon: 478501, riego: 14000000, nota: "Suelos fértiles, planos y alta luminosidad. El intenso verano es la principal limitante, por eso el riego es decisivo." },
-  Oriental:      { rffPico: 26, tea: 0.215, costoTon: 470000, riego: 9000000,  nota: "La zona de mayor área del país, con buena disponibilidad de agua." },
-  Central:       { rffPico: 23, tea: 0.200, costoTon: 485000, riego: 10000000, nota: "Afectación histórica por Pudrición del Cogollo; exige material resistente." },
-  Suroccidental: { rffPico: 25, tea: 0.235, costoTon: 460000, riego: 8000000,  nota: "Predomina el híbrido OxG, con récord reciente de productividad." },
+  Norte:         { rffPico:24, tea:0.205, costoTon:478501, riego:14000000, nota:"Suelos fértiles, planos y alta luminosidad. El intenso verano es la principal limitante, por eso el riego es decisivo." },
+  Oriental:      { rffPico:26, tea:0.215, costoTon:470000, riego:9000000,  nota:"La zona de mayor área del país, con buena disponibilidad de agua." },
+  Central:       { rffPico:23, tea:0.200, costoTon:485000, riego:10000000, nota:"Afectación histórica por Pudrición del Cogollo; exige material resistente." },
+  Suroccidental: { rffPico:25, tea:0.235, costoTon:460000, riego:8000000,  nota:"Predomina el híbrido OxG, con récord reciente de productividad." },
 };
 
-function curva(rffPico) { return [0, 0, rffPico*0.14, rffPico*0.43, rffPico*0.71, rffPico*0.89, ...Array(19).fill(rffPico)]; }
-const precioRFF  = (cpoCOP, dP, tea) => (cpoCOP * dP * 1.05 - CESION_COP) * tea;
-const precioCPOt = (cpoCOP, dP)      =>  cpoCOP * dP * 1.05;
+function curva(rffPico) { return [0,0,rffPico*0.14,rffPico*0.43,rffPico*0.71,rffPico*0.89,...Array(19).fill(rffPico)]; }
+const precioRFF  = (cpoCOP,dP,tea) => (cpoCOP*dP*1.05 - CESION_COP)*tea;
+const precioCPOt = (cpoCOP,dP)     =>  cpoCOP*dP*1.05;
 
 function flujoFinca(f, zona, cpoCOP) {
-  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const p = precioRFF(cpoCOP, f.dPrecio, z.tea); const cf = [];
-  const fijoOp = f.manoObra + f.insumos + f.asistTec + f.admin;
-  for (let y = 0; y < 25; y++) {
-    const prod = (f.enProduccion ? z.rffPico : prod0[y]) * f.dProd;
-    let egreso = fijoOp + prod * (f.cosechaTon + f.transpTon);
-    if (y === 0) egreso += f.precioTierra + f.riego;
-    if (!f.enProduccion && y < 3) egreso += f.estab / 3;
-    cf.push((prod * p - egreso) * f.area);
+  const z=ZONAS[zona], prod0=curva(z.rffPico), p=precioRFF(cpoCOP,f.dPrecio,z.tea), cf=[];
+  const fijoOp=f.manoObra+f.insumos+f.asistTec+f.admin;
+  for(let y=0;y<25;y++){
+    const prod=(f.enProduccion?z.rffPico:prod0[y])*f.dProd;
+    let eg=fijoOp+prod*(f.cosechaTon+f.transpTon);
+    if(y===0) eg+=f.precioTierra+f.riego;
+    if(!f.enProduccion&&y<3) eg+=f.estab/3;
+    cf.push((prod*p - eg)*f.area);
   }
   return cf;
 }
-function irr(cf) { let lo = -0.9, hi = 2; const f = (r) => cf.reduce((s,c,i) => s + c/Math.pow(1+r,i), 0); if (f(lo)*f(hi) > 0) return null; for (let k=0;k<200;k++){const m=(lo+hi)/2,v=f(m);if(Math.abs(v)<1)return m;if(f(lo)*v<0)hi=m;else lo=m;} return (lo+hi)/2; }
-const npv     = (cf, r) => cf.reduce((s,c,i) => s + c/Math.pow(1+r,i), 0);
-const payback = (cf)    => { let a=0; for(let i=0;i<cf.length;i++){a+=cf[i];if(a>=0)return i+1;} return null; };
-function nucleoCal(ha, sy, H, dProd, dPrecio, zona, cpoCOP) {
-  const z = ZONAS[zona]; const prod0 = curva(z.rffPico); const prff = precioRFF(cpoCOP, dPrecio, z.tea);
-  const rff = Array(H).fill(0), cf = Array(H).fill(0), haProd = Array(H).fill(0);
-  for (let t=0;t<25;t++){const c=sy+t;if(c>=H)break;const prod=prod0[t]*dProd;rff[c]+=prod*ha;if(t>=3)haProd[c]+=ha;cf[c]+=(prod*prff-prod*z.costoTon)*ha-(t===0?(18000000+z.riego)*ha:0);}
-  return { rff, cf, haProd };
+
+function flujoFincaDetalle(f, zona, cpoCOP) {
+  const z=ZONAS[zona], prod0=curva(z.rffPico), p=precioRFF(cpoCOP,f.dPrecio,z.tea);
+  const fijoOp=f.manoObra+f.insumos+f.asistTec+f.admin;
+  let acum=0; const rows=[];
+  for(let y=0;y<25;y++){
+    const prodHa=(f.enProduccion?z.rffPico:prod0[y])*f.dProd;
+    const ingresoHa=prodHa*p;
+    let costoHa=fijoOp+prodHa*(f.cosechaTon+f.transpTon);
+    if(y===0) costoHa+=f.precioTierra+f.riego;
+    if(!f.enProduccion&&y<3) costoHa+=f.estab/3;
+    const flujoHa=ingresoHa-costoHa;
+    const flujoTotal=flujoHa*f.area;
+    acum+=flujoTotal;
+    rows.push({year:y+1,prodHa,ingresoHa,costoHa,flujoHa,flujoTotal,acum});
+  }
+  return rows;
 }
 
-const fmtCOP  = (n) => { if(n==null||isNaN(n))return"—";const a=Math.abs(n);if(a>=1e9)return`${(n/1e9).toFixed(2)} MM`;if(a>=1e6)return`${(n/1e6).toFixed(0)} M`;if(a>=1e3)return`${(n/1e3).toFixed(0)} k`;return n.toFixed(0); };
-const fmtUSD  = (n) => { if(n==null||isNaN(n))return"—";const a=Math.abs(n);if(a>=1e6)return`USD ${(n/1e6).toFixed(1)}M`;if(a>=1e3)return`USD ${(n/1e3).toFixed(0)}k`;return`USD ${n.toFixed(0)}`; };
-const fmtPct  = (n) => (n==null||isNaN(n)?"—":`${(n*100).toFixed(1)}%`);
-const fmtFull = (n) => (n==null||isNaN(n)?"—":new Intl.NumberFormat("es-CO",{maximumFractionDigits:0}).format(n));
+function irr(cf){let lo=-0.9,hi=2;const f=(r)=>cf.reduce((s,c,i)=>s+c/Math.pow(1+r,i),0);if(f(lo)*f(hi)>0)return null;for(let k=0;k<200;k++){const m=(lo+hi)/2,v=f(m);if(Math.abs(v)<1)return m;if(f(lo)*v<0)hi=m;else lo=m;}return(lo+hi)/2;}
+const npv=(cf,r)=>cf.reduce((s,c,i)=>s+c/Math.pow(1+r,i),0);
+const payback=(cf)=>{let a=0;for(let i=0;i<cf.length;i++){a+=cf[i];if(a>=0)return i+1;}return null;};
 
-const C = {
-  bg:       "#091711",
-  panel:    "#0F211B",
-  panel2:   "#142B24",
-  line:     "#1E3C33",
-  lineHi:   "#2A5247",
-  ink:      "#E6EFE9",
-  dim:      "#6B8F7E",
-  dimHi:    "#9BB8AA",
-  gold:     "#C9993E",
-  goldHi:   "#E0B55A",
-  goldSoft: "rgba(201,153,62,0.13)",
-  frond:    "#3EC87A",
-  frondSoft:"rgba(62,200,122,0.12)",
-  red:      "#D96B52",
-  amber:    "#D49B38",
-  shadow:   "0 4px 24px rgba(0,0,0,0.4)",
-  shadowSm: "0 2px 10px rgba(0,0,0,0.3)",
+function nucleoCal(ha,sy,H,dProd,dPrecio,zona,cpoCOP){
+  const z=ZONAS[zona],prod0=curva(z.rffPico),prff=precioRFF(cpoCOP,dPrecio,z.tea);
+  const rff=Array(H).fill(0),cf=Array(H).fill(0),haProd=Array(H).fill(0);
+  for(let t=0;t<25;t++){const c=sy+t;if(c>=H)break;const prod=prod0[t]*dProd;rff[c]+=prod*ha;if(t>=3)haProd[c]+=ha;cf[c]+=(prod*prff-prod*z.costoTon)*ha-(t===0?(18000000+z.riego)*ha:0);}
+  return{rff,cf,haProd};
+}
+
+const fmtCOP  = n=>{if(n==null||isNaN(n))return"—";const a=Math.abs(n);if(a>=1e9)return`${(n/1e9).toFixed(2)} MM`;if(a>=1e6)return`${(n/1e6).toFixed(0)} M`;if(a>=1e3)return`${(n/1e3).toFixed(0)} k`;return n.toFixed(0);};
+const fmtUSD  = n=>{if(n==null||isNaN(n))return"—";const a=Math.abs(n);if(a>=1e6)return`USD ${(n/1e6).toFixed(1)}M`;if(a>=1e3)return`USD ${(n/1e3).toFixed(0)}k`;return`USD ${n.toFixed(0)}`;};
+const fmtPct  = n=>(n==null||isNaN(n)?"—":`${(n*100).toFixed(1)}%`);
+const fmtFull = n=>(n==null||isNaN(n)?"—":new Intl.NumberFormat("es-CO",{maximumFractionDigits:0}).format(n));
+
+const C={
+  bg:"#091711", panel:"#0F211B", panel2:"#142B24", line:"#1E3C33", lineHi:"#2A5247",
+  ink:"#E6EFE9", dim:"#6B8F7E", dimHi:"#9BB8AA",
+  gold:"#C9993E", goldHi:"#E0B55A", goldSoft:"rgba(201,153,62,0.13)",
+  frond:"#3EC87A", frondSoft:"rgba(62,200,122,0.12)",
+  red:"#D96B52", redSoft:"rgba(217,107,82,0.12)",
+  amber:"#D49B38",
+  shadow:"0 4px 24px rgba(0,0,0,0.4)", shadowSm:"0 2px 10px rgba(0,0,0,0.3)",
 };
 
-const GLOSARIO = {
-  "RFF":                "Racimos de Fruta Fresca. El fruto que se cosecha de la palma y se lleva a la planta. Se mide en toneladas por hectárea.",
-  "CPO":                "Aceite de Palma Crudo. El aceite que sale de procesar el RFF en la extractora. Es el producto que se vende.",
-  "TEA":                "Tasa de Extracción de Aceite. Qué porcentaje del racimo se convierte en aceite. En la Zona Norte ronda 20-22%.",
-  "Palmiste":           "La almendra dentro del fruto. Da un segundo aceite que se vende aparte y suma ingresos.",
-  "Maquila":            "Procesar fruta de un tercero cobrando una tarifa por tonelada, sin comprar el fruto. La planta gana el margen industrial.",
-  "Núcleo-satélite":    "Modelo donde tú tienes el núcleo (finca + extractora) y pequeños productores alrededor te venden su fruta. Creces sin comprar toda la tierra.",
-  "TIR":                "Tasa Interna de Retorno. El rendimiento anual del proyecto. Si supera tu costo de oportunidad, el proyecto crea valor.",
-  "VPN":                "Valor Presente Neto. Cuánto vale hoy toda la plata futura del proyecto, descontada. Positivo = conviene.",
-  "EBITDA":             "Ganancia operativa antes de intereses, impuestos y depreciación. La medida con la que los fondos valoran una empresa.",
-  "EV":                 "Enterprise Value o Valor de la Empresa. Lo que vale el negocio completo, como múltiplo del EBITDA o por hectárea.",
-  "Brownfield":         "Comprar una finca que ya produce. Genera caja desde el primer día, sin esperar a que crezca la palma.",
-  "Greenfield":         "Comprar tierra y sembrar desde cero. Más barato por hectárea pero hay que esperar 3-4 años a la primera cosecha.",
-  "ICPA":               "Índice de Costos para el Cultivo de la Palma de Aceite, de Fedepalma. La referencia oficial de costos del sector en Colombia.",
+const GLOSARIO={
+  "RFF":"Racimos de Fruta Fresca. El fruto que se cosecha de la palma y se lleva a la planta. Se mide en toneladas por hectárea.",
+  "CPO":"Aceite de Palma Crudo. El aceite que sale de procesar el RFF en la extractora. Es el producto que se vende.",
+  "TEA":"Tasa de Extracción de Aceite. Qué porcentaje del racimo se convierte en aceite. En la Zona Norte ronda 20-22%.",
+  "Palmiste":"La almendra dentro del fruto. Da un segundo aceite que se vende aparte y suma ingresos.",
+  "Maquila":"Procesar fruta de un tercero cobrando una tarifa por tonelada, sin comprar el fruto. La planta gana el margen industrial.",
+  "Núcleo-satélite":"Modelo donde tú tienes el núcleo (finca + extractora) y pequeños productores alrededor te venden su fruta. Creces sin comprar toda la tierra.",
+  "TIR":"Tasa Interna de Retorno. El rendimiento anual del proyecto. Si supera tu costo de oportunidad, el proyecto crea valor.",
+  "VPN":"Valor Presente Neto. Cuánto vale hoy toda la plata futura del proyecto, descontada. Positivo = conviene.",
+  "EBITDA":"Ganancia operativa antes de intereses, impuestos y depreciación. La medida con la que los fondos valoran una empresa.",
+  "EV":"Enterprise Value o Valor de la Empresa. Lo que vale el negocio completo, como múltiplo del EBITDA o por hectárea.",
+  "Brownfield":"Comprar una finca que ya produce. Genera caja desde el primer día, sin esperar a que crezca la palma.",
+  "Greenfield":"Comprar tierra y sembrar desde cero. Más barato por hectárea pero hay que esperar 3-4 años a la primera cosecha.",
+  "ICPA":"Índice de Costos para el Cultivo de la Palma de Aceite, de Fedepalma. La referencia oficial de costos del sector en Colombia.",
   "Período improductivo":"Los primeros 3 años tras sembrar, cuando la palma aún no da fruto y solo hay gastos.",
 };
 
-function Term({ children, def }) {
-  return <span style={{ borderBottom:`1px dotted ${C.gold}`, cursor:"help", color:"inherit" }} title={def}>{children}</span>;
-}
+function Term({children,def}){return<span style={{borderBottom:`1px dotted ${C.gold}`,cursor:"help",color:"inherit"}} title={def}>{children}</span>;}
 
-function Slider({ label, sub, value, min, max, step, onChange, format }) {
-  const pct = ((value-min)/(max-min))*100;
-  return (
-    <div style={{ marginBottom:18 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:7 }}>
-        <span style={{ fontSize:11, letterSpacing:0.5, color:C.dim, textTransform:"uppercase", fontWeight:500 }}>{label}</span>
-        <span style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:13, color:C.goldHi, fontWeight:700 }}>{format(value)}</span>
+function Slider({label,sub,value,min,max,step,onChange,format}){
+  const pct=((value-min)/(max-min))*100;
+  return(
+    <div style={{marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:7}}>
+        <span style={{fontSize:11,letterSpacing:0.5,color:C.dim,textTransform:"uppercase",fontWeight:500}}>{label}</span>
+        <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:13,color:C.goldHi,fontWeight:700}}>{format(value)}</span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        style={{ width:"100%", height:4, appearance:"none", WebkitAppearance:"none", borderRadius:2, outline:"none", cursor:"pointer",
-          background:`linear-gradient(90deg,${C.gold} ${pct}%,${C.line} ${pct}%)` }} />
-      {sub && <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>{sub}</div>}
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e=>onChange(parseFloat(e.target.value))}
+        style={{width:"100%",height:4,appearance:"none",WebkitAppearance:"none",borderRadius:2,outline:"none",cursor:"pointer",
+          background:`linear-gradient(90deg,${C.gold} ${pct}%,${C.line} ${pct}%)`}}/>
+      {sub&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>{sub}</div>}
     </div>
   );
 }
-
-function NumField({ label, sub, value, onChange }) {
-  return (
-    <div style={{ marginBottom:14 }}>
-      <div style={{ fontSize:11, color:C.dim, textTransform:"uppercase", letterSpacing:0.5, fontWeight:500, marginBottom:5 }}>{label}</div>
-      <input type="number" value={value} onChange={(e) => onChange(parseFloat(e.target.value)||0)} className="num-in" />
-      {sub && <div style={{ fontSize:10, color:C.dim, marginTop:4 }}>{sub}</div>}
+function NumField({label,sub,value,onChange}){
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,color:C.dim,textTransform:"uppercase",letterSpacing:0.5,fontWeight:500,marginBottom:5}}>{label}</div>
+      <input type="number" value={value} onChange={e=>onChange(parseFloat(e.target.value)||0)} className="num-in"/>
+      {sub&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>{sub}</div>}
     </div>
   );
 }
-
-function KPI({ label, value, accent, big, hint }) {
-  return (
-    <div style={{ background:C.panel, border:`1px solid ${C.line}`, borderTop:`3px solid ${accent||C.lineHi}`, borderRadius:12,
-      padding:"14px 18px", flex:1, minWidth:0, boxShadow:C.shadowSm }}>
-      <div style={{ fontSize:10, letterSpacing:0.7, color:C.dim, textTransform:"uppercase", fontWeight:600, marginBottom:8 }}>{label}</div>
-      <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:big?28:18, fontWeight:700, lineHeight:1,
-        color:accent||C.ink, letterSpacing:-0.5 }}>{value}</div>
-      {hint && <div style={{ fontSize:10, color:C.dim, marginTop:6 }}>{hint}</div>}
+function KPI({label,value,accent,big,hint}){
+  return(
+    <div style={{background:C.panel,border:`1px solid ${C.line}`,borderTop:`3px solid ${accent||C.lineHi}`,borderRadius:12,
+      padding:"14px 18px",flex:1,minWidth:0,boxShadow:C.shadowSm}}>
+      <div style={{fontSize:10,letterSpacing:0.7,color:C.dim,textTransform:"uppercase",fontWeight:600,marginBottom:8}}>{label}</div>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:big?28:18,fontWeight:700,lineHeight:1,color:accent||C.ink,letterSpacing:-0.5}}>{value}</div>
+      {hint&&<div style={{fontSize:10,color:C.dim,marginTop:6}}>{hint}</div>}
     </div>
   );
 }
-
-function Card({ title, right, accent, children }) {
-  return (
-    <div style={{ background:C.panel, border:`1px solid ${C.line}`, borderRadius:14,
-      padding:"20px 22px", boxShadow:C.shadow }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          {accent && <div style={{ width:3, height:16, background:accent, borderRadius:2 }} />}
-          <div style={{ fontSize:11, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:C.dimHi }}>{title}</div>
+function Card({title,right,accent,children}){
+  return(
+    <div style={{background:C.panel,border:`1px solid ${C.line}`,borderRadius:14,padding:"20px 22px",boxShadow:C.shadow}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {accent&&<div style={{width:3,height:16,background:accent,borderRadius:2}}/>}
+          <div style={{fontSize:11,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",color:C.dimHi}}>{title}</div>
         </div>
         {right}
       </div>
@@ -156,113 +158,169 @@ function Card({ title, right, accent, children }) {
     </div>
   );
 }
-
-function SidePanel({ title, sub, children }) {
-  return (
-    <div style={{ background:C.panel, border:`1px solid ${C.line}`, borderRadius:14, padding:"20px 22px", boxShadow:C.shadow }}>
-      <div style={{ fontSize:11, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", color:C.dimHi, marginBottom: sub?4:16 }}>{title}</div>
-      {sub && <div style={{ fontSize:11, color:C.dim, marginBottom:16 }}>{sub}</div>}
+function SidePanel({title,sub,children}){
+  return(
+    <div style={{background:C.panel,border:`1px solid ${C.line}`,borderRadius:14,padding:"20px 22px",boxShadow:C.shadow}}>
+      <div style={{fontSize:11,fontWeight:700,letterSpacing:1.2,textTransform:"uppercase",color:C.dimHi,marginBottom:sub?4:16}}>{title}</div>
+      {sub&&<div style={{fontSize:11,color:C.dim,marginBottom:16}}>{sub}</div>}
       {children}
     </div>
   );
 }
-
-function SectionLabel({ children }) {
-  return (
-    <div style={{ borderTop:`1px solid ${C.line}`, margin:"16px 0", paddingTop:16, fontSize:10,
-      color:C.gold, textTransform:"uppercase", letterSpacing:1, fontWeight:700 }}>{children}</div>
-  );
+function SectionLabel({children}){
+  return<div style={{borderTop:`1px solid ${C.line}`,margin:"16px 0",paddingTop:16,fontSize:10,color:C.gold,textTransform:"uppercase",letterSpacing:1,fontWeight:700}}>{children}</div>;
 }
 
-function BarLineChart({ series, accLine, labels, height=230 }) {
-  const W=760, H=height, padL=8, padR=8, padT=18, padB=26;
-  const acc = useMemo(() => { if(!accLine)return null;let a=0;return series.map(c=>(a+=c)); },[series,accLine]);
-  const all=[...series,...(acc||[])]; const max=Math.max(...all,0),min=Math.min(...all,0),range=max-min||1,n=series.length;
-  const x=(i)=>padL+(i/(n-1))*(W-padL-padR); const y=(v)=>padT+(1-(v-min)/range)*(H-padT-padB); const zeroY=y(0);
+function BarLineChart({series,accLine,labels,height=230}){
+  const W=760,H=height,padL=8,padR=8,padT=18,padB=26;
+  const acc=useMemo(()=>{if(!accLine)return null;let a=0;return series.map(c=>(a+=c));},[series,accLine]);
+  const all=[...series,...(acc||[])];const max=Math.max(...all,0),min=Math.min(...all,0),range=max-min||1,n=series.length;
+  const x=i=>padL+(i/(n-1))*(W-padL-padR);const y=v=>padT+(1-(v-min)/range)*(H-padT-padB);const zeroY=y(0);
   const accPath=acc?acc.map((v,i)=>`${i===0?"M":"L"} ${x(i)} ${y(v)}`).join(" "):"";
   const crossIdx=acc?acc.findIndex(v=>v>=0):-1;
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:"auto", display:"block" }}>
-      <defs>
-        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={C.frond} stopOpacity="0.25"/>
-          <stop offset="100%" stopColor={C.frond} stopOpacity="0.01"/>
-        </linearGradient>
-      </defs>
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+      <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.frond} stopOpacity="0.25"/><stop offset="100%" stopColor={C.frond} stopOpacity="0.01"/></linearGradient></defs>
       <line x1={padL} y1={zeroY} x2={W-padR} y2={zeroY} stroke={C.lineHi} strokeWidth="1"/>
       {series.map((c,i)=>{const bw=(W-padL-padR)/n*0.55,bx=x(i)-bw/2,by=c>=0?y(c):zeroY,bh=Math.abs(y(c)-zeroY);return<rect key={i} x={bx} y={by} width={bw} height={Math.max(bh,0)} fill={c>=0?"rgba(62,200,122,0.28)":"rgba(217,107,82,0.28)"} rx="2"/>;})}
       {acc&&<><path d={`${accPath} L ${x(n-1)} ${zeroY} L ${x(0)} ${zeroY} Z`} fill="url(#g1)"/><path d={accPath} fill="none" stroke={C.frond} strokeWidth="2"/></>}
-      {crossIdx>0&&<g>
-        <line x1={x(crossIdx)} y1={padT} x2={x(crossIdx)} y2={H-padB} stroke={C.gold} strokeWidth="1" strokeDasharray="3 3" opacity="0.7"/>
-        <circle cx={x(crossIdx)} cy={y(acc[crossIdx])} r="4" fill={C.gold}/>
-        <text x={x(crossIdx)} y={padT+2} fill={C.gold} fontSize="9" fontFamily="monospace" textAnchor="middle">recupera año {crossIdx+1}</text>
-      </g>}
+      {crossIdx>0&&<g><line x1={x(crossIdx)} y1={padT} x2={x(crossIdx)} y2={H-padB} stroke={C.gold} strokeWidth="1" strokeDasharray="3 3" opacity="0.7"/><circle cx={x(crossIdx)} cy={y(acc[crossIdx])} r="4" fill={C.gold}/><text x={x(crossIdx)} y={padT+2} fill={C.gold} fontSize="9" fontFamily="monospace" textAnchor="middle">recupera año {crossIdx+1}</text></g>}
       {labels.map((L,idx)=><text key={idx} x={x(L.i)} y={H-8} fill={C.dim} fontSize="9" fontFamily="monospace" textAnchor="middle">{L.t}</text>)}
     </svg>
   );
 }
 
-function App() {
+// ── Comparador mini-chart (dos series superpuestas) ──────────────────────────
+function DualChart({cfA,cfB,labelA,labelB,colorA,colorB,height=200}){
+  const W=760,H=height,padL=8,padR=8,padT=14,padB=22;
+  const accA=useMemo(()=>{let a=0;return cfA.map(c=>(a+=c));},[cfA]);
+  const accB=useMemo(()=>{let a=0;return cfB.map(c=>(a+=c));},[cfB]);
+  const all=[...accA,...accB];const max=Math.max(...all,0),min=Math.min(...all,0),range=max-min||1,n=cfA.length;
+  const x=i=>padL+(i/(n-1))*(W-padL-padR);const y=v=>padT+(1-(v-min)/range)*(H-padT-padB);const zeroY=y(0);
+  const path=arr=>arr.map((v,i)=>`${i===0?"M":"L"} ${x(i)} ${y(v)}`).join(" ");
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:"auto",display:"block"}}>
+      <line x1={padL} y1={zeroY} x2={W-padR} y2={zeroY} stroke={C.lineHi} strokeWidth="1"/>
+      <path d={path(accA)} fill="none" stroke={colorA} strokeWidth="2.2"/>
+      <path d={path(accB)} fill="none" stroke={colorB} strokeWidth="2.2" strokeDasharray="6 3"/>
+      {[0,4,9,14,19,24].map(i=><text key={i} x={x(i)} y={H-6} fill={C.dim} fontSize="9" fontFamily="monospace" textAnchor="middle">{i+1}</text>)}
+      <text x={W-padR} y={y(accA[accA.length-1])-5} fill={colorA} fontSize="9" fontFamily="monospace" textAnchor="end">{labelA}</text>
+      <text x={W-padR} y={y(accB[accB.length-1])+12} fill={colorB} fontSize="9" fontFamily="monospace" textAnchor="end">{labelB}</text>
+    </svg>
+  );
+}
+
+function App(){
   const [tab,  setTab]  = useState("inicio");
-  const [modo, setModo] = useLocalStorage("palma_modo", "simple");
-  const [zona, setZona] = useLocalStorage("palma_zona", "Norte");
-  const [anio, setAnio] = useLocalStorage("palma_anio", 2026);
-  const z = ZONAS[zona];
-  const cpoCOP = PRECIOS_CPO[anio];
+  const [modo, setModo] = useLocalStorage("palma_modo","simple");
+  const [zona, setZona] = useLocalStorage("palma_zona","Norte");
+  const [anio, setAnio] = useLocalStorage("palma_anio",2026);
+  const [tablaOpen, setTablaOpen] = useState(false);
+  const z=ZONAS[zona];
+  const cpoCOP=PRECIOS_CPO[anio];
 
-  const [finca, setFinca] = useLocalStorage("palma_finca2", {
-    area:200, enProduccion:false, precioTierra:18000000, estab:18000000, riego:14000000,
-    manoObra:2500000, insumos:1800000, asistTec:400000, admin:600000,
-    cosechaTon:35000, transpTon:15000, dPrecio:1, dProd:1, trm:4200, wacc:0.12
+  const [finca,setFinca]=useLocalStorage("palma_finca2",{
+    area:200,enProduccion:false,precioTierra:18000000,estab:18000000,riego:14000000,
+    manoObra:2500000,insumos:1800000,asistTec:400000,admin:600000,
+    cosechaTon:35000,transpTon:15000,dPrecio:1,dProd:1,trm:4200,wacc:0.12
   });
-  const [nucleos, setNucleos] = useLocalStorage("palma_nuc2", [
-    { id:1, nombre:"Núcleo Cesar",     ha:3000, start:0 },
-    { id:2, nombre:"Núcleo Magdalena", ha:5000, start:2 },
-    { id:3, nombre:"Núcleo Aracataca", ha:4000, start:4 },
+  const [nucleos,setNucleos]=useLocalStorage("palma_nuc2",[
+    {id:1,nombre:"Núcleo Cesar",ha:3000,start:0},
+    {id:2,nombre:"Núcleo Magdalena",ha:5000,start:2},
+    {id:3,nombre:"Núcleo Aracataca",ha:4000,start:4},
   ]);
-  const [ext, setExt] = useLocalStorage("palma_ext2", { capacidad:30, capex:35000000000, tarifa:180000, opexTon:120000, pctTerceros:0.5 });
-  const [cap, setCap] = useLocalStorage("palma_cap2", { multiplo:6, evHa:10000, dilucion:0.35 });
+  const [ext,setExt]=useLocalStorage("palma_ext2",{capacidad:30,capex:35000000000,tarifa:180000,opexTon:120000,pctTerceros:0.5});
+  const [cap,setCap]=useLocalStorage("palma_cap2",{multiplo:6,evHa:10000,dilucion:0.35});
 
-  const setF = (k) => (v) => setFinca(p=>({...p,[k]:v}));
-  const setE = (k) => (v) => setExt(p=>({...p,[k]:v}));
-  const setC = (k) => (v) => setCap(p=>({...p,[k]:v}));
+  const setF=k=>v=>setFinca(p=>({...p,[k]:v}));
+  const setE=k=>v=>setExt(p=>({...p,[k]:v}));
+  const setC=k=>v=>setCap(p=>({...p,[k]:v}));
 
-  useEffect(()=>{ setFinca(p=>({...p,riego:z.riego})); },[zona]);
+  useEffect(()=>{setFinca(p=>({...p,riego:z.riego}));},[zona]);
 
-  const cfF  = useMemo(()=>flujoFinca(finca,zona,cpoCOP),[finca,zona,cpoCOP]);
-  const tirF = irr(cfF), vanF=npv(cfF,finca.wacc), pbF=payback(cfF), invF=-cfF[0];
+  // ── cálculos principales ────────────────────────────────────────────────────
+  const cfF   = useMemo(()=>flujoFinca(finca,zona,cpoCOP),[finca,zona,cpoCOP]);
+  const tirF  = irr(cfF), vanF=npv(cfF,finca.wacc), pbF=payback(cfF), invF=-cfF[0];
 
-  const H = 15;
-  const port = useMemo(()=>{
+  // [4] Precio de ruptura — dPrecio donde TIR = wacc
+  const breakEvenDp = useMemo(()=>{
+    const tirAt=dp=>irr(flujoFinca({...finca,dPrecio:dp},zona,cpoCOP));
+    if(tirAt(1.5)<finca.wacc) return null; // ni al max price llega
+    if(tirAt(0.1)>finca.wacc) return 0.1;  // hasta precio muy bajo es atractivo
+    let lo=0.1,hi=1.5;
+    for(let k=0;k<60;k++){const m=(lo+hi)/2;if(tirAt(m)>finca.wacc)hi=m;else lo=m;if(hi-lo<0.001)break;}
+    return(lo+hi)/2;
+  },[finca,zona,cpoCOP]);
+  const breakEvenCOP  = breakEvenDp!=null ? cpoCOP*breakEvenDp : null;
+  const margenPrecio  = breakEvenDp!=null ? (finca.dPrecio-breakEvenDp)/finca.dPrecio : null;
+
+  // [3] Análisis de sensibilidad — matriz precio × productividad
+  const PRICE_COLS = [0.65,0.75,0.85,1.0,1.15,1.30,1.45];
+  const PROD_ROWS  = [0.70,0.80,0.90,1.0,1.10,1.20,1.30];
+  const sensMatrix = useMemo(()=>
+    PROD_ROWS.map(dp=>PRICE_COLS.map(dpr=>{
+      const t=irr(flujoFinca({...finca,dPrecio:dpr,dProd:dp},zona,cpoCOP));
+      return t;
+    }))
+  ,[finca,zona,cpoCOP]);
+
+  // [5] Tabla de flujos detallada
+  const detalles = useMemo(()=>flujoFincaDetalle(finca,zona,cpoCOP),[finca,zona,cpoCOP]);
+
+  // [6] Comparador greenfield vs brownfield
+  const cfGreen = useMemo(()=>flujoFinca({...finca,enProduccion:false},zona,cpoCOP),[finca,zona,cpoCOP]);
+  const cfBrown = useMemo(()=>flujoFinca({...finca,enProduccion:true}, zona,cpoCOP),[finca,zona,cpoCOP]);
+  const tirGreen=irr(cfGreen),tirBrown=irr(cfBrown);
+  const vanGreen=npv(cfGreen,finca.wacc),vanBrown=npv(cfBrown,finca.wacc);
+  const pbGreen=payback(cfGreen),pbBrown=payback(cfBrown);
+  const invGreen=-cfGreen[0],invBrown=-cfBrown[0];
+
+  // Empresa
+  const H=15;
+  const port=useMemo(()=>{
     const rff=Array(H).fill(0),cult=Array(H).fill(0),haProd=Array(H).fill(0);
     nucleos.forEach(n=>{const r=nucleoCal(n.ha,n.start,H,finca.dProd,finca.dPrecio,zona,cpoCOP);for(let c=0;c<H;c++){rff[c]+=r.rff[c];cult[c]+=r.cf[c];haProd[c]+=r.haProd[c];}});
     return{rff,cult,haProd};
   },[nucleos,finca.dProd,finca.dPrecio,zona,cpoCOP]);
-
-  const haTot = nucleos.reduce((a,n)=>a+n.ha,0);
-  const extr = useMemo(()=>{
+  const haTot=nucleos.reduce((a,n)=>a+n.ha,0);
+  const extr=useMemo(()=>{
     const rffT=port.rff.map(x=>x*ext.pctTerceros);
     const pCPO=precioCPOt(cpoCOP,finca.dPrecio),pPK=pCPO*0.6,pComp=precioRFF(cpoCOP,1,z.tea);
     const eb=Array(H).fill(0);
     for(let c=0;c<H;c++){const mp=port.rff[c]*ext.tarifa;const aT=rffT[c]*z.tea*pCPO+rffT[c]*0.05*pPK;eb[c]=mp+aT-rffT[c]*pComp-rffT[c]*ext.opexTon;}
     return{eb};
   },[port,ext,finca.dPrecio,zona,cpoCOP]);
-
-  const consol        = useMemo(()=>port.cult.map((c,i)=>c+extr.eb[i]),[port,extr]);
-  const ebitdaRegimen = consol[H-1];
-  const valEbitda     = ebitdaRegimen*cap.multiplo, valHa=haTot*cap.evHa*finca.trm, evFinal=Math.max(valEbitda,valHa);
-  const tuPart=1-cap.dilucion, tuValor=evFinal*tuPart, controlOk=tuPart>0.5;
+  const consol=useMemo(()=>port.cult.map((c,i)=>c+extr.eb[i]),[port,extr]);
+  const ebitdaRegimen=consol[H-1];
+  const valEbitda=ebitdaRegimen*cap.multiplo,valHa=haTot*cap.evHa*finca.trm,evFinal=Math.max(valEbitda,valHa);
+  const tuPart=1-cap.dilucion,tuValor=evFinal*tuPart,controlOk=tuPart>0.5;
 
   const salud      = tirF==null?"mal":tirF>=finca.wacc+0.06?"bien":tirF>=finca.wacc?"regular":"mal";
   const saludColor = {bien:C.frond,regular:C.amber,mal:C.red}[salud];
   const saludTexto = {bien:"Atractivo",regular:"Aceptable",mal:"En riesgo"}[salud];
 
-  const tabsSimple = [["inicio","Inicio"],["finca","Evaluar finca"],["empresa","Mi empresa"],["glosario","Glosario"]];
-  const tabsAvz    = [["inicio","Inicio"],["finca","Evaluar finca"],["extractora","Extractora"],["empresa","Mi empresa"],["capital","Capital y salida"],["glosario","Glosario"]];
-  const tabs = modo==="simple" ? tabsSimple : tabsAvz;
+  const tabsSimple=[["inicio","Inicio"],["finca","Evaluar finca"],["empresa","Mi empresa"],["glosario","Glosario"]];
+  const tabsAvz   =[["inicio","Inicio"],["finca","Evaluar finca"],["extractora","Extractora"],["empresa","Mi empresa"],["capital","Capital y salida"],["glosario","Glosario"]];
+  const tabs=modo==="simple"?tabsSimple:tabsAvz;
 
-  return (
-    <div style={{ minHeight:"100vh", background:C.bg, color:C.ink, fontFamily:"'Inter',system-ui,sans-serif" }}>
+  // color de celda de sensibilidad
+  const sensColor=t=>{
+    if(t==null) return"#1a0a08";
+    if(t>=finca.wacc+0.08) return"rgba(62,200,122,0.45)";
+    if(t>=finca.wacc+0.04) return"rgba(62,200,122,0.22)";
+    if(t>=finca.wacc)      return"rgba(212,155,56,0.30)";
+    if(t>=finca.wacc-0.04) return"rgba(217,107,82,0.25)";
+    return"rgba(217,107,82,0.45)";
+  };
+  const sensTextColor=t=>{
+    if(t==null) return C.red;
+    if(t>=finca.wacc+0.04) return C.frond;
+    if(t>=finca.wacc)      return C.amber;
+    return C.red;
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:C.bg,color:C.ink,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&family=Archivo:wght@700;800;900&display=swap');
         *{box-sizing:border-box}
@@ -277,148 +335,136 @@ function App() {
         .tog-btn{flex:1;border-radius:9px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.15s;letter-spacing:0.2px}
         .card-cta{background:${C.panel};border:1px solid ${C.line};border-radius:14px;padding:20px 22px;cursor:pointer;transition:border 0.15s,box-shadow 0.15s;box-shadow:${C.shadowSm}}
         .card-cta:hover{border-color:${C.gold};box-shadow:${C.shadow}}
+        .tbl td,.tbl th{padding:7px 10px;border-bottom:1px solid ${C.line};font-size:12px;white-space:nowrap}
+        .tbl th{font-size:10px;font-weight:700;letter-spacing:0.7px;text-transform:uppercase;color:${C.dim};text-align:right}
+        .tbl th:first-child{text-align:left}
+        .tbl td{text-align:right;font-family:'JetBrains Mono',monospace}
+        .tbl td:first-child{text-align:left;font-family:inherit;color:${C.dim}}
+        .tbl tr:hover td{background:rgba(255,255,255,0.02)}
         @media(max-width:880px){.grid2{grid-template-columns:1fr !important}.kpi-row{flex-wrap:wrap}}
       `}</style>
 
-      {/* ── HEADER ────────────────────────────────────────── */}
-      <div style={{ borderBottom:`1px solid ${C.line}`, background:`linear-gradient(180deg,#0F2119 0%,${C.bg} 100%)` }}>
-        <div style={{ maxWidth:1220, margin:"0 auto", padding:"18px 24px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:14 }}>
-
-          {/* Logo + título */}
-          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{ width:44, height:44, borderRadius:11, background:`linear-gradient(135deg,${C.gold},${C.goldHi})`,
-              display:"flex", alignItems:"center", justifyContent:"center", color:"#06120E",
-              fontFamily:"'Archivo',sans-serif", fontWeight:900, fontSize:16, letterSpacing:-0.5, flexShrink:0,
-              boxShadow:`0 2px 12px rgba(201,153,62,0.35)` }}>GVC</div>
+      {/* ── HEADER ─────────────────────────────────────── */}
+      <div style={{borderBottom:`1px solid ${C.line}`,background:`linear-gradient(180deg,#0F2119 0%,${C.bg} 100%)`}}>
+        <div style={{maxWidth:1220,margin:"0 auto",padding:"18px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:44,height:44,borderRadius:11,background:`linear-gradient(135deg,${C.gold},${C.goldHi})`,
+              display:"flex",alignItems:"center",justifyContent:"center",color:"#06120E",
+              fontFamily:"'Archivo',sans-serif",fontWeight:900,fontSize:16,letterSpacing:-0.5,flexShrink:0,
+              boxShadow:`0 2px 12px rgba(201,153,62,0.35)`}}>GVC</div>
             <div>
-              <div style={{ fontFamily:"'Archivo',sans-serif", fontWeight:900, fontSize:24, lineHeight:1, letterSpacing:-0.8, color:C.ink }}>GVC Capital</div>
-              <div style={{ fontSize:10, letterSpacing:2.5, color:C.gold, textTransform:"uppercase", marginTop:3, fontWeight:600 }}>Plataforma de Inversión Palmera</div>
+              <div style={{fontFamily:"'Archivo',sans-serif",fontWeight:900,fontSize:24,lineHeight:1,letterSpacing:-0.8,color:C.ink}}>GVC Capital</div>
+              <div style={{fontSize:10,letterSpacing:2.5,color:C.gold,textTransform:"uppercase",marginTop:3,fontWeight:600}}>Plataforma de Inversión Palmera</div>
             </div>
           </div>
-
-          {/* Controles */}
-          <div style={{ display:"flex", gap:10, alignItems:"flex-end", flexWrap:"wrap" }}>
+          <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
             <div>
-              <div style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:0.8, fontWeight:600, marginBottom:4 }}>Zona palmera</div>
-              <select className="sel" value={zona} onChange={(e)=>setZona(e.target.value)}>
+              <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.8,fontWeight:600,marginBottom:4}}>Zona palmera</div>
+              <select className="sel" value={zona} onChange={e=>setZona(e.target.value)}>
                 {Object.keys(ZONAS).map(zz=><option key={zz} value={zz}>{zz}</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:0.8, fontWeight:600, marginBottom:4 }}>Precio CPO</div>
-              <select className="sel" value={anio} onChange={(e)=>setAnio(Number(e.target.value))}>
+              <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.8,fontWeight:600,marginBottom:4}}>Precio CPO</div>
+              <select className="sel" value={anio} onChange={e=>setAnio(Number(e.target.value))}>
                 {Object.keys(PRECIOS_CPO).map(a=><option key={a} value={a}>{a} · {fmtCOP(PRECIOS_CPO[a])}/t</option>)}
               </select>
             </div>
             <div>
-              <div style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:0.8, fontWeight:600, marginBottom:4 }}>Vista</div>
-              <div style={{ display:"flex", background:C.panel2, border:`1px solid ${C.line}`, borderRadius:9, overflow:"hidden" }}>
+              <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.8,fontWeight:600,marginBottom:4}}>Vista</div>
+              <div style={{display:"flex",background:C.panel2,border:`1px solid ${C.line}`,borderRadius:9,overflow:"hidden"}}>
                 {["simple","avanzado"].map(m=>(
                   <button key={m} onClick={()=>setModo(m)}
-                    style={{ background:modo===m?C.gold:"transparent", color:modo===m?"#06120E":C.dim,
-                      border:"none", padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer",
-                      fontFamily:"inherit", textTransform:"capitalize", transition:"all 0.15s" }}>{m}</button>
+                    style={{background:modo===m?C.gold:"transparent",color:modo===m?"#06120E":C.dim,
+                      border:"none",padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",
+                      fontFamily:"inherit",textTransform:"capitalize",transition:"all 0.15s"}}>{m}</button>
                 ))}
               </div>
             </div>
           </div>
-
         </div>
-
-        {/* Nav tabs */}
-        <div style={{ maxWidth:1220, margin:"0 auto", padding:"0 24px", display:"flex", gap:2, flexWrap:"wrap" }}>
+        <div style={{maxWidth:1220,margin:"0 auto",padding:"0 24px",display:"flex",gap:2,flexWrap:"wrap"}}>
           {tabs.map(([k,l])=>(
             <button key={k} className="tab-btn" onClick={()=>setTab(k)}
-              style={{ color:tab===k?C.goldHi:C.dim, borderBottom:`2px solid ${tab===k?C.gold:"transparent"}`,
-                borderRadius:"8px 8px 0 0", paddingBottom:12, paddingTop:10 }}>{l}</button>
+              style={{color:tab===k?C.goldHi:C.dim,borderBottom:`2px solid ${tab===k?C.gold:"transparent"}`,
+                borderRadius:"8px 8px 0 0",paddingBottom:12,paddingTop:10}}>{l}</button>
           ))}
         </div>
       </div>
 
-      {/* ── CONTENIDO ─────────────────────────────────────── */}
-      <div style={{ maxWidth:1220, margin:"0 auto", padding:"28px 24px 70px" }}>
+      {/* ── CONTENIDO ───────────────────────────────────── */}
+      <div style={{maxWidth:1220,margin:"0 auto",padding:"28px 24px 70px"}}>
 
         {/* ====== INICIO ====== */}
         {tab==="inicio"&&(
-          <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-
-            {/* Hero banner */}
-            <div style={{ background:`linear-gradient(135deg,#12271F 0%,#0F2019 100%)`, border:`1px solid ${C.line}`, borderRadius:16, padding:"28px 30px", boxShadow:C.shadow }}>
-              <div style={{ fontSize:11, color:C.gold, textTransform:"uppercase", letterSpacing:2, fontWeight:700, marginBottom:10 }}>Colombia · Cuarto productor mundial de aceite de palma</div>
-              <div style={{ fontSize:17, color:C.ink, lineHeight:1.75, maxWidth:680 }}>
-                Una hectárea de palma rinde unas <b style={{ color:C.goldHi }}>2,6 toneladas de aceite</b> — seis veces más que la soya. Con cerca de <b style={{ color:C.goldHi }}>1,9 millones de toneladas al año</b>, Colombia lidera América.
+          <div style={{display:"flex",flexDirection:"column",gap:20}}>
+            <div style={{background:`linear-gradient(135deg,#12271F 0%,#0F2019 100%)`,border:`1px solid ${C.line}`,borderRadius:16,padding:"28px 30px",boxShadow:C.shadow}}>
+              <div style={{fontSize:11,color:C.gold,textTransform:"uppercase",letterSpacing:2,fontWeight:700,marginBottom:10}}>Colombia · Cuarto productor mundial de aceite de palma</div>
+              <div style={{fontSize:17,color:C.ink,lineHeight:1.75,maxWidth:680}}>
+                Una hectárea de palma rinde unas <b style={{color:C.goldHi}}>2,6 toneladas de aceite</b> — seis veces más que la soya. Con cerca de <b style={{color:C.goldHi}}>1,9 millones de toneladas al año</b>, Colombia lidera América.
               </div>
-              <div style={{ marginTop:16, padding:"14px 18px", background:"rgba(0,0,0,0.25)", borderRadius:10, fontSize:13, color:C.dimHi, lineHeight:1.7, borderLeft:`3px solid ${C.gold}` }}>
-                <b style={{ color:C.goldHi }}>Zona {zona} —</b> {z.nota}
+              <div style={{marginTop:16,padding:"14px 18px",background:"rgba(0,0,0,0.25)",borderRadius:10,fontSize:13,color:C.dimHi,lineHeight:1.7,borderLeft:`3px solid ${C.gold}`}}>
+                <b style={{color:C.goldHi}}>Zona {zona} —</b> {z.nota}
               </div>
             </div>
-
-            {/* KPIs de zona */}
-            <div className="grid2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:12 }}>
+            <div className="grid2" style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12}}>
               <KPI label="Rendimiento pico"   value={`${z.rffPico} t/ha`} accent={C.gold}  hint="RFF en etapa adulta"/>
               <KPI label="Tasa de extracción" value={fmtPct(z.tea)}       accent={C.frond} hint="aceite por racimo"/>
               <KPI label="Costo referencia"   value={fmtFull(z.costoTon)} accent={C.amber} hint="COP/t RFF · ICPA 2024"/>
               <KPI label={`Precio CPO ${anio}`} value={fmtCOP(cpoCOP)}   accent={C.frond} hint={`COP/t · FEP ${anio}`}/>
             </div>
-
-            {/* CTAs */}
-            <div className="grid2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            <div className="grid2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
               {[
-                ["Evaluar finca","finca",  C.gold,  "Ingresa precio de la tierra, costos y producción. Obtén TIR, VPN y un veredicto claro sobre si la compra conviene."],
-                ["Mi empresa",   "empresa",C.frond, "Consolida varias fincas, agrega una extractora y conoce el valor de tu empresa y tu participación al levantar capital."],
+                ["Evaluar finca","finca", C.gold, "Ingresa precio de la tierra, costos y producción. Obtén TIR, VPN, precio de ruptura y análisis de sensibilidad."],
+                ["Mi empresa",  "empresa",C.frond,"Consolida varias fincas, agrega una extractora y conoce el valor de tu empresa y tu participación al levantar capital."],
               ].map(([t,dest,ac,d])=>(
                 <div key={t} className="card-cta" onClick={()=>setTab(dest)}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                    <div style={{ width:3, height:18, background:ac, borderRadius:2 }}/>
-                    <div style={{ fontSize:16, fontWeight:800, color:ac, fontFamily:"'Archivo',sans-serif" }}>{t}</div>
-                    <div style={{ color:ac, fontSize:16, marginLeft:"auto" }}>→</div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                    <div style={{width:3,height:18,background:ac,borderRadius:2}}/>
+                    <div style={{fontSize:16,fontWeight:800,color:ac,fontFamily:"'Archivo',sans-serif"}}>{t}</div>
+                    <div style={{color:ac,fontSize:16,marginLeft:"auto"}}>→</div>
                   </div>
-                  <div style={{ fontSize:13, color:C.dimHi, lineHeight:1.7 }}>{d}</div>
+                  <div style={{fontSize:13,color:C.dimHi,lineHeight:1.7}}>{d}</div>
                 </div>
               ))}
             </div>
-
-            {/* Disclaimer */}
-            <div style={{ fontSize:11, color:C.dim, lineHeight:1.7, padding:"14px 16px", border:`1px solid ${C.line}`, borderRadius:10, background:C.panel }}>
-              Los valores base por zona provienen de <b style={{ color:C.dimHi }}>Fedepalma y Cenipalma (ICPA 2024)</b>. Herramienta de trabajo de GVC Capital; cifras indicativas, no constituyen recomendación de inversión.
+            <div style={{fontSize:11,color:C.dim,lineHeight:1.7,padding:"14px 16px",border:`1px solid ${C.line}`,borderRadius:10,background:C.panel}}>
+              Los valores base por zona provienen de <b style={{color:C.dimHi}}>Fedepalma y Cenipalma (ICPA 2024)</b>. Herramienta de trabajo de GVC Capital; cifras indicativas, no constituyen recomendación de inversión.
             </div>
           </div>
         )}
 
         {/* ====== EVALUAR FINCA ====== */}
         {tab==="finca"&&<>
-          <div className="kpi-row" style={{ display:"flex", gap:12, alignItems:"stretch", marginBottom:22 }}>
-            <div style={{ background:saludColor, borderRadius:12, padding:"14px 22px", display:"flex", flexDirection:"column", justifyContent:"center", minWidth:150, boxShadow:C.shadowSm }}>
-              <div style={{ fontSize:9, color:"#06120E", textTransform:"uppercase", letterSpacing:1, fontWeight:700, opacity:0.7, marginBottom:4 }}>Veredicto</div>
-              <div style={{ fontSize:24, fontWeight:900, color:"#06120E", fontFamily:"'Archivo',sans-serif", letterSpacing:-0.5 }}>{saludTexto}</div>
+          {/* KPI row — incluye precio de ruptura [4] */}
+          <div className="kpi-row" style={{display:"flex",gap:12,alignItems:"stretch",marginBottom:22,flexWrap:"wrap"}}>
+            <div style={{background:saludColor,borderRadius:12,padding:"14px 22px",display:"flex",flexDirection:"column",justifyContent:"center",minWidth:150,boxShadow:C.shadowSm}}>
+              <div style={{fontSize:9,color:"#06120E",textTransform:"uppercase",letterSpacing:1,fontWeight:700,opacity:0.7,marginBottom:4}}>Veredicto</div>
+              <div style={{fontSize:24,fontWeight:900,color:"#06120E",fontFamily:"'Archivo',sans-serif",letterSpacing:-0.5}}>{saludTexto}</div>
             </div>
-            <KPI label="TIR de la compra"  value={fmtPct(tirF)}    accent={tirF>=finca.wacc?C.frond:C.red} big/>
-            <KPI label="VPN (COP)"         value={fmtCOP(vanF)}    accent={vanF>=0?C.frond:C.red} big/>
-            <KPI label="Recuperación"      value={pbF?`año ${pbF}`:"—"} accent={C.gold}/>
-            <KPI label="Inversión inicial" value={fmtCOP(invF)}    accent={C.amber}/>
+            <KPI label="TIR de la compra"    value={fmtPct(tirF)}       accent={tirF>=finca.wacc?C.frond:C.red} big/>
+            <KPI label="VPN (COP)"           value={fmtCOP(vanF)}       accent={vanF>=0?C.frond:C.red} big/>
+            <KPI label="Recuperación"        value={pbF?`año ${pbF}`:"—"} accent={C.gold}/>
+            <KPI label="Precio de ruptura"
+              value={breakEvenCOP?fmtCOP(breakEvenCOP):"—"}
+              accent={margenPrecio>0.2?C.frond:margenPrecio>0.08?C.amber:C.red}
+              hint={margenPrecio!=null?`margen ${fmtPct(margenPrecio)} bajo precio actual`:"no alcanza wacc"}/>
           </div>
 
-          <div className="grid2" style={{ display:"grid", gridTemplateColumns:"370px 1fr", gap:18 }}>
+          {/* Panel principal: controles + gráfico */}
+          <div className="grid2" style={{display:"grid",gridTemplateColumns:"370px 1fr",gap:18}}>
             <SidePanel title="Tus números" sub={`Base Zona ${zona} (Fedepalma). Ajusta a tu caso.`}>
-              {/* Toggle tipo */}
-              <div style={{ display:"flex", gap:8, marginBottom:18 }}>
-                {[
-                  [false,"Tierra para sembrar"],
-                  [true, "Palma en producción"],
-                ].map(([val,label])=>(
-                  <button key={label} className="tog-btn"
-                    onClick={()=>setFinca(p=>({...p,enProduccion:val}))}
-                    style={{ background:finca.enProduccion===val?C.gold:"transparent",
-                      color:finca.enProduccion===val?"#06120E":C.dim,
-                      border:`1px solid ${finca.enProduccion===val?C.gold:C.line}` }}>{label}</button>
+              <div style={{display:"flex",gap:8,marginBottom:18}}>
+                {[[false,"Tierra para sembrar"],[true,"Palma en producción"]].map(([val,label])=>(
+                  <button key={label} className="tog-btn" onClick={()=>setFinca(p=>({...p,enProduccion:val}))}
+                    style={{background:finca.enProduccion===val?C.gold:"transparent",color:finca.enProduccion===val?"#06120E":C.dim,
+                      border:`1px solid ${finca.enProduccion===val?C.gold:C.line}`}}>{label}</button>
                 ))}
               </div>
-
               <NumField label="Área (hectáreas)" value={finca.area} onChange={setF("area")}/>
               <NumField label="Precio de la tierra (COP/ha)" sub="lo que cuesta comprar cada hectárea" value={finca.precioTierra} onChange={setF("precioTierra")}/>
               {!finca.enProduccion&&<NumField label="Establecimiento (COP/ha)" sub="vivero, siembra, años 0-3" value={finca.estab} onChange={setF("estab")}/>}
               <NumField label="Sistema de riego (COP/ha)" value={finca.riego} onChange={setF("riego")}/>
-
               <SectionLabel>Costos anuales por hectárea</SectionLabel>
               <NumField label="Mano de obra / empleados" value={finca.manoObra} onChange={setF("manoObra")}/>
               <NumField label="Insumos (fertilizantes, control)" value={finca.insumos} onChange={setF("insumos")}/>
@@ -428,7 +474,6 @@ function App() {
                 <NumField label="Cosecha (COP/tonelada)" value={finca.cosechaTon} onChange={setF("cosechaTon")}/>
                 <NumField label="Transporte (COP/tonelada)" value={finca.transpTon} onChange={setF("transpTon")}/>
               </>}
-
               <SectionLabel>Sensibilidad</SectionLabel>
               <Slider label={`Precio CPO (base ${anio})`} sub={`${fmtCOP(cpoCOP*finca.dPrecio)}/t · ref. FEP ${anio}`}
                 value={finca.dPrecio} min={0.6} max={1.5} step={0.01} onChange={setF("dPrecio")} format={v=>`×${v.toFixed(2)}`}/>
@@ -437,40 +482,188 @@ function App() {
               {modo==="avanzado"&&<Slider label="Costo de oportunidad" value={finca.wacc} min={0.06} max={0.2} step={0.005} onChange={setF("wacc")} format={fmtPct}/>}
             </SidePanel>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div style={{display:"flex",flexDirection:"column",gap:18}}>
               <Card title="Flujo de caja · 25 años" accent={C.frond}
-                right={<div style={{ fontSize:11, color:C.dim }}><span style={{ color:C.frond }}>━ acumulado</span> · barras = anual</div>}>
+                right={<div style={{fontSize:11,color:C.dim}}><span style={{color:C.frond}}>━ acumulado</span> · barras = anual</div>}>
                 <BarLineChart series={cfF} accLine labels={[0,4,9,14,19,24].map(i=>({i,t:i+1}))}/>
               </Card>
               <Card title="Interpretación" accent={C.gold}>
-                <div style={{ fontSize:14, color:C.dimHi, lineHeight:1.8 }}>
+                <div style={{fontSize:14,color:C.dimHi,lineHeight:1.8}}>
                   {tirF==null
-                    ?<>Con estos números el proyecto <b style={{ color:C.red }}>no es viable</b>: no alcanza a recuperar la inversión. Revisa el precio de compra o los costos.</>
-                    :<>Estás evaluando {finca.enProduccion
-                      ?<><Term def={GLOSARIO.Brownfield}><b style={{ color:C.goldHi }}>una finca que ya produce</b></Term> (genera caja desde el primer año)</>
-                      :<><Term def={GLOSARIO.Greenfield}><b style={{ color:C.goldHi }}>tierra para sembrar</b></Term> (con <Term def={GLOSARIO["Período improductivo"]}>período improductivo</Term> de 3-4 años)</>
-                    } en la Zona {zona}. La <Term def={GLOSARIO.TIR}>TIR</Term> es{" "}
-                    <b style={{ color:saludColor }}>{fmtPct(tirF)}</b>
-                    {tirF>=finca.wacc
-                      ?<>, sobre tu mínimo del {fmtPct(finca.wacc)} — <b style={{ color:C.frond }}>el proyecto crea valor</b>.</>
-                      :<>, bajo tu mínimo del {fmtPct(finca.wacc)} — <b style={{ color:C.red }}>conviene renegociar el precio</b>.</>
-                    } Recuperas en el <b style={{ color:C.ink }}>{pbF?`año ${pbF}`:"—"}</b> y cada hectárea deja un VPN de <b style={{ color:C.ink }}>{fmtCOP(vanF/finca.area)}</b>.</>
+                    ?<>Con estos números el proyecto <b style={{color:C.red}}>no es viable</b>: no alcanza a recuperar la inversión. Revisa el precio de compra o los costos.</>
+                    :<>La <Term def={GLOSARIO.TIR}>TIR</Term> es <b style={{color:saludColor}}>{fmtPct(tirF)}</b>
+                      {tirF>=finca.wacc
+                        ?<>, sobre el mínimo del {fmtPct(finca.wacc)} — <b style={{color:C.frond}}>el proyecto crea valor</b>.</>
+                        ?<>, bajo el mínimo del {fmtPct(finca.wacc)} — <b style={{color:C.red}}>conviene renegociar el precio</b>.</>
+                      }
+                      {breakEvenCOP&&<> El precio del aceite puede caer hasta <b style={{color:C.gold}}>{fmtCOP(breakEvenCOP)}/t</b> (margen del {fmtPct(margenPrecio)}) antes de que deje de ser atractivo.</>}
+                    </>
                   }
                 </div>
               </Card>
             </div>
           </div>
+
+          {/* ── [6] COMPARADOR BROWNFIELD vs GREENFIELD ── */}
+          <div style={{marginTop:18}}>
+            <Card title="Comparador: Sembrar vs. Comprar en producción" accent={C.gold}
+              right={<span style={{fontSize:11,color:C.dim}}>mismos parámetros, distinto punto de entrada</span>}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:20}}>
+                {[
+                  {label:"Tierra para sembrar",color:C.frond,tir:tirGreen,van:vanGreen,pb:pbGreen,inv:invGreen},
+                  {label:"Palma en producción",color:C.gold, tir:tirBrown,van:vanBrown,pb:pbBrown,inv:invBrown},
+                ].map(({label,color,tir,van,pb,inv})=>(
+                  <div key={label} style={{background:C.panel2,border:`1px solid ${C.line}`,borderTop:`3px solid ${color}`,borderRadius:12,padding:"16px 18px"}}>
+                    <div style={{fontSize:12,fontWeight:700,color,marginBottom:14,letterSpacing:0.3}}>{label}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      {[
+                        ["TIR",         fmtPct(tir),   tir>=finca.wacc?C.frond:C.red],
+                        ["VPN",         fmtCOP(van),   van>=0?C.frond:C.red],
+                        ["Recuperación",pb?`año ${pb}`:"—",C.gold],
+                        ["Inversión",   fmtCOP(inv),   C.amber],
+                      ].map(([k,v,ac])=>(
+                        <div key={k}>
+                          <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.6,fontWeight:600,marginBottom:3}}>{k}</div>
+                          <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:15,fontWeight:700,color:ac}}>{v}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Flujo acumulado a 25 años — <span style={{color:C.frond}}>━ Sembrar</span> · <span style={{color:C.gold}}>╌ Producción</span></div>
+              <DualChart cfA={cfGreen} cfB={cfBrown} labelA="Sembrar" labelB="Producción" colorA={C.frond} colorB={C.gold}/>
+              <div style={{marginTop:14,padding:"12px 16px",background:C.panel2,borderRadius:10,fontSize:13,color:C.dimHi,lineHeight:1.7}}>
+                {tirBrown>tirGreen
+                  ?<><b style={{color:C.goldHi}}>Comprar en producción</b> da una TIR {fmtPct(tirBrown-tirGreen)} más alta y genera caja desde el año 1, pero exige {fmtPct(Math.abs(invBrown-invGreen)/invGreen)} más capital inicial.</>
+                  :<><b style={{color:C.frond}}>Sembrar desde cero</b> ofrece mejor TIR a largo plazo gracias al menor precio de entrada. La espera de {pbGreen||"—"} años es el costo del greenfield.</>
+                }
+              </div>
+            </Card>
+          </div>
+
+          {/* ── [3] ANÁLISIS DE SENSIBILIDAD ── */}
+          <div style={{marginTop:18}}>
+            <Card title="Análisis de sensibilidad — TIR según precio y productividad" accent={C.amber}
+              right={<div style={{display:"flex",gap:12,fontSize:11,color:C.dim,alignItems:"center"}}>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"rgba(62,200,122,0.45)",borderRadius:2,display:"inline-block"}}/> &gt; wacc+8%</span>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"rgba(212,155,56,0.30)",borderRadius:2,display:"inline-block"}}/> wacc±4%</span>
+                <span style={{display:"flex",alignItems:"center",gap:4}}><span style={{width:10,height:10,background:"rgba(217,107,82,0.45)",borderRadius:2,display:"inline-block"}}/> &lt; wacc</span>
+              </div>}>
+              <div style={{overflowX:"auto"}}>
+                <table style={{borderCollapse:"collapse",width:"100%",fontSize:12}}>
+                  <thead>
+                    <tr>
+                      <th style={{padding:"6px 10px",textAlign:"left",fontSize:10,color:C.dim,fontWeight:700,letterSpacing:0.5,whiteSpace:"nowrap"}}>
+                        Prod ↓ / Precio →
+                      </th>
+                      {PRICE_COLS.map(dpr=>(
+                        <th key={dpr} style={{padding:"6px 8px",textAlign:"center",fontSize:10,color:dpr===finca.dPrecio?C.goldHi:C.dim,fontWeight:dpr===finca.dPrecio?700:500,letterSpacing:0.5,background:dpr===finca.dPrecio?"rgba(201,153,62,0.08)":"transparent"}}>
+                          {fmtCOP(cpoCOP*dpr)}<br/><span style={{opacity:0.6}}>×{dpr.toFixed(2)}</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PROD_ROWS.map((dp,ri)=>(
+                      <tr key={dp}>
+                        <td style={{padding:"6px 10px",fontSize:11,color:dp===finca.dProd?C.goldHi:C.dim,fontWeight:dp===finca.dProd?700:400,background:dp===finca.dProd?"rgba(201,153,62,0.06)":"transparent",whiteSpace:"nowrap"}}>
+                          ×{dp.toFixed(2)} prod ({(z.rffPico*dp).toFixed(1)} t)
+                        </td>
+                        {PRICE_COLS.map((dpr,ci)=>{
+                          const t=sensMatrix[ri][ci];
+                          const isActive=Math.abs(dp-finca.dProd)<0.01&&Math.abs(dpr-finca.dPrecio)<0.01;
+                          return(
+                            <td key={ci} style={{padding:"5px 8px",textAlign:"center",background:sensColor(t),
+                              fontFamily:"'JetBrains Mono',monospace",fontWeight:isActive?700:500,
+                              color:sensTextColor(t),border:isActive?`1px solid ${C.gold}`:"none",borderRadius:isActive?4:0}}>
+                              {t!=null?fmtPct(t):"n/v"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{marginTop:12,fontSize:11,color:C.dim}}>
+                La celda resaltada corresponde a tus parámetros actuales. El wacc usado es {fmtPct(finca.wacc)}.
+              </div>
+            </Card>
+          </div>
+
+          {/* ── [5] TABLA DE FLUJOS AÑO A AÑO ── */}
+          <div style={{marginTop:18}}>
+            <Card title="Flujo de caja detallado · año a año" accent={C.frond}
+              right={
+                <button onClick={()=>setTablaOpen(o=>!o)}
+                  style={{background:tablaOpen?C.goldSoft:"transparent",border:`1px solid ${C.line}`,color:tablaOpen?C.goldHi:C.dim,
+                    borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit",transition:"all 0.15s"}}>
+                  {tablaOpen?"Ocultar tabla":"Ver tabla completa"}
+                </button>
+              }>
+              {/* Resumen siempre visible */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:tablaOpen?16:0}}>
+                {[
+                  ["Año pico",     `año ${detalles.findIndex(r=>r.prodHa===Math.max(...detalles.map(r=>r.prodHa)))+1}`, C.frond],
+                  ["Ingreso pico", fmtCOP(Math.max(...detalles.map(r=>r.ingresoHa))*finca.area), C.gold],
+                  ["Costo año 0",  fmtCOP(detalles[0].costoHa*finca.area), C.red],
+                  ["Flujo año 25", fmtCOP(detalles[24].flujoTotal), C.frond],
+                ].map(([k,v,ac])=>(
+                  <div key={k} style={{background:C.panel2,border:`1px solid ${C.line}`,borderRadius:9,padding:"10px 14px"}}>
+                    <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.6,fontWeight:600,marginBottom:4}}>{k}</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:ac}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+
+              {tablaOpen&&(
+                <div style={{overflowX:"auto"}}>
+                  <table className="tbl" style={{width:"100%",borderCollapse:"collapse"}}>
+                    <thead>
+                      <tr>
+                        <th>Año</th>
+                        <th>Prod (t/ha)</th>
+                        <th>Ingreso/ha</th>
+                        <th>Costo/ha</th>
+                        <th>Flujo/ha</th>
+                        <th>Flujo total</th>
+                        <th>Acumulado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalles.map(r=>{
+                        const pbRow=r.acum>=0&&detalles[r.year-2]?.acum<0;
+                        return(
+                          <tr key={r.year} style={{background:pbRow?C.goldSoft:r.flujoTotal<0?C.redSoft:"transparent"}}>
+                            <td style={{color:pbRow?C.goldHi:C.dim,fontWeight:pbRow?700:400}}>{r.year}{pbRow?" ★":""}</td>
+                            <td>{r.prodHa.toFixed(1)}</td>
+                            <td style={{color:C.frond}}>{fmtCOP(r.ingresoHa)}</td>
+                            <td style={{color:C.red}}>{fmtCOP(r.costoHa)}</td>
+                            <td style={{color:r.flujoHa>=0?C.frond:C.red}}>{fmtCOP(r.flujoHa)}</td>
+                            <td style={{color:r.flujoTotal>=0?C.frond:C.red,fontWeight:600}}>{fmtCOP(r.flujoTotal)}</td>
+                            <td style={{color:r.acum>=0?C.frond:C.dim,fontWeight:r.acum>=0?600:400}}>{fmtCOP(r.acum)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div style={{marginTop:10,fontSize:10,color:C.dim}}>★ Año de recuperación de la inversión. Valores en COP totales para las {finca.area} ha.</div>
+                </div>
+              )}
+            </Card>
+          </div>
         </>}
 
         {/* ====== EXTRACTORA (avanzado) ====== */}
         {tab==="extractora"&&<>
-          <div className="kpi-row" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:22 }}>
-            <KPI label="Capacidad"       value={`${ext.capacidad} t/h`} accent={C.gold}  big/>
-            <KPI label="EBITDA régimen"  value={fmtUSD(extr.eb[H-1]/finca.trm)} accent={C.frond} big/>
-            <KPI label="CAPEX planta"    value={fmtCOP(ext.capex)} accent={C.amber}/>
-            <KPI label="Fruta terceros"  value={fmtPct(ext.pctTerceros)} accent={C.gold}/>
+          <div className="kpi-row" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:22}}>
+            <KPI label="Capacidad"      value={`${ext.capacidad} t/h`}           accent={C.gold}  big/>
+            <KPI label="EBITDA régimen" value={fmtUSD(extr.eb[H-1]/finca.trm)} accent={C.frond} big/>
+            <KPI label="CAPEX planta"   value={fmtCOP(ext.capex)}               accent={C.amber}/>
+            <KPI label="Fruta terceros" value={fmtPct(ext.pctTerceros)}          accent={C.gold}/>
           </div>
-          <div className="grid2" style={{ display:"grid", gridTemplateColumns:"350px 1fr", gap:18 }}>
+          <div className="grid2" style={{display:"grid",gridTemplateColumns:"350px 1fr",gap:18}}>
             <SidePanel title="Planta de beneficio">
               <Slider label="Capacidad" sub={`${fmtFull(ext.capacidad*4000)} t/año`} value={ext.capacidad} min={15} max={90} step={5} onChange={setE("capacidad")} format={v=>`${v} t/h`}/>
               <Slider label="CAPEX de la planta" value={ext.capex} min={15000000000} max={120000000000} step={5000000000} onChange={setE("capex")} format={fmtCOP}/>
@@ -478,13 +671,13 @@ function App() {
               <Slider label="OPEX procesamiento" sub="COP/t · terceros" value={ext.opexTon} min={60000} max={200000} step={10000} onChange={setE("opexTon")} format={fmtFull}/>
               <Slider label="Fruta de terceros" sub="% sobre la propia" value={ext.pctTerceros} min={0} max={1.5} step={0.05} onChange={setE("pctTerceros")} format={fmtPct}/>
             </SidePanel>
-            <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div style={{display:"flex",flexDirection:"column",gap:18}}>
               <Card title="EBITDA de la extractora · 15 años" accent={C.frond}>
                 <BarLineChart series={extr.eb} accLine labels={Array.from({length:8},(_,k)=>({i:k*2,t:k*2+1}))}/>
               </Card>
               <Card title="Cómo se forma el margen" accent={C.gold}>
-                <div style={{ fontSize:14, color:C.dimHi, lineHeight:1.8 }}>
-                  Sobre tu fruta propia, la planta cobra una <Term def={GLOSARIO.Maquila}><b style={{ color:C.ink }}>tarifa de maquila</b></Term>. Sobre la <Term def={GLOSARIO["Núcleo-satélite"]}>fruta de terceros</Term> captura el margen industrial completo. Así la extractora multiplica el valor sin necesidad de ser dueño de toda la tierra.
+                <div style={{fontSize:14,color:C.dimHi,lineHeight:1.8}}>
+                  Sobre tu fruta propia, la planta cobra una <Term def={GLOSARIO.Maquila}><b style={{color:C.ink}}>tarifa de maquila</b></Term>. Sobre la <Term def={GLOSARIO["Núcleo-satélite"]}>fruta de terceros</Term> captura el margen industrial completo. Así la extractora multiplica el valor sin necesidad de ser dueño de toda la tierra.
                 </div>
               </Card>
             </div>
@@ -493,57 +686,50 @@ function App() {
 
         {/* ====== MI EMPRESA ====== */}
         {tab==="empresa"&&<>
-          <div className="kpi-row" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:22 }}>
-            <KPI label="Hectáreas totales"  value={fmtFull(haTot)} accent={C.gold}  big/>
-            <KPI label="EBITDA en régimen"  value={fmtUSD(ebitdaRegimen/finca.trm)} accent={C.frond} big/>
-            <KPI label="Valor de la empresa" value={fmtUSD(evFinal/finca.trm)} accent={C.goldHi} big/>
-            {modo==="avanzado"&&<KPI label="Tu participación" value={fmtPct(tuPart)} accent={controlOk?C.frond:C.red}/>}
+          <div className="kpi-row" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:22}}>
+            <KPI label="Hectáreas totales"   value={fmtFull(haTot)}              accent={C.gold}  big/>
+            <KPI label="EBITDA en régimen"   value={fmtUSD(ebitdaRegimen/finca.trm)} accent={C.frond} big/>
+            <KPI label="Valor de la empresa" value={fmtUSD(evFinal/finca.trm)}   accent={C.goldHi} big/>
+            {modo==="avanzado"&&<KPI label="Tu participación" value={fmtPct(tuPart)}          accent={controlOk?C.frond:C.red}/>}
             {modo==="avanzado"&&<KPI label="Valor de tu parte" value={fmtUSD(tuValor/finca.trm)} accent={C.frond}/>}
           </div>
-          <div className="grid2" style={{ display:"grid", gridTemplateColumns:"350px 1fr", gap:18 }}>
+          <div className="grid2" style={{display:"grid",gridTemplateColumns:"350px 1fr",gap:18}}>
             <SidePanel title="Tus fincas (núcleos)">
               {nucleos.map(nuc=>(
-                <div key={nuc.id} style={{ background:C.panel2, border:`1px solid ${C.line}`, borderRadius:10, padding:"12px 14px", marginBottom:10 }}>
-                  <input className="num-in" style={{ marginBottom:8, fontFamily:"inherit", fontWeight:600 }}
-                    value={nuc.nombre} onChange={(e)=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,nombre:e.target.value}:x))}/>
-                  <div style={{ display:"flex", gap:8 }}>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:0.5, fontWeight:600, marginBottom:4 }}>Hectáreas</div>
-                      <input className="num-in" type="number" value={nuc.ha}
-                        onChange={(e)=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,ha:parseInt(e.target.value)||0}:x))}/>
+                <div key={nuc.id} style={{background:C.panel2,border:`1px solid ${C.line}`,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                  <input className="num-in" style={{marginBottom:8,fontFamily:"inherit",fontWeight:600}}
+                    value={nuc.nombre} onChange={e=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,nombre:e.target.value}:x))}/>
+                  <div style={{display:"flex",gap:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.5,fontWeight:600,marginBottom:4}}>Hectáreas</div>
+                      <input className="num-in" type="number" value={nuc.ha} onChange={e=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,ha:parseInt(e.target.value)||0}:x))}/>
                     </div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:9, color:C.dim, textTransform:"uppercase", letterSpacing:0.5, fontWeight:600, marginBottom:4 }}>Año siembra</div>
-                      <input className="num-in" type="number" value={nuc.start}
-                        onChange={(e)=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,start:parseInt(e.target.value)||0}:x))}/>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:9,color:C.dim,textTransform:"uppercase",letterSpacing:0.5,fontWeight:600,marginBottom:4}}>Año siembra</div>
+                      <input className="num-in" type="number" value={nuc.start} onChange={e=>setNucleos(p=>p.map(x=>x.id===nuc.id?{...x,start:parseInt(e.target.value)||0}:x))}/>
                     </div>
                     <button onClick={()=>setNucleos(p=>p.filter(x=>x.id!==nuc.id))}
-                      style={{ alignSelf:"flex-end", background:"transparent", border:`1px solid ${C.line}`,
-                        color:C.red, borderRadius:7, padding:"7px 11px", cursor:"pointer", fontSize:15 }}>×</button>
+                      style={{alignSelf:"flex-end",background:"transparent",border:`1px solid ${C.line}`,color:C.red,borderRadius:7,padding:"7px 11px",cursor:"pointer",fontSize:15}}>×</button>
                   </div>
                 </div>
               ))}
               <button onClick={()=>setNucleos(p=>[...p,{id:Date.now(),nombre:`Núcleo ${p.length+1}`,ha:2000,start:6}])}
-                style={{ width:"100%", background:C.goldSoft, border:`1px dashed ${C.gold}`,
-                  color:C.goldHi, borderRadius:9, padding:"11px", cursor:"pointer",
-                  fontSize:12, fontWeight:700, fontFamily:"inherit", letterSpacing:0.3 }}>+ Agregar finca</button>
-
+                style={{width:"100%",background:C.goldSoft,border:`1px dashed ${C.gold}`,color:C.goldHi,borderRadius:9,padding:"11px",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",letterSpacing:0.3}}>+ Agregar finca</button>
               {modo==="avanzado"&&<>
                 <SectionLabel>Valoración y salida</SectionLabel>
                 <Slider label="Múltiplo de salida" sub="EV / EBITDA" value={cap.multiplo} min={4} max={12} step={0.5} onChange={setC("multiplo")} format={v=>`${v.toFixed(1)}x`}/>
                 <Slider label="Dilución acumulada" sub="% cedido a inversionistas" value={cap.dilucion} min={0} max={0.7} step={0.01} onChange={setC("dilucion")} format={fmtPct}/>
               </>}
             </SidePanel>
-
-            <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+            <div style={{display:"flex",flexDirection:"column",gap:18}}>
               <Card title="EBITDA consolidado · cultivo + extractora" accent={C.frond}>
                 <BarLineChart series={consol} accLine labels={Array.from({length:8},(_,k)=>({i:k*2,t:k*2+1}))}/>
               </Card>
               <Card title="Interpretación" accent={C.gold}>
-                <div style={{ fontSize:14, color:C.dimHi, lineHeight:1.8 }}>
-                  Con <b style={{ color:C.goldHi }}>{fmtFull(haTot)} ha</b> en {nucleos.length} fincas más la extractora, la empresa generaría un <Term def={GLOSARIO.EBITDA}>EBITDA</Term> en régimen de <b style={{ color:C.frond }}>{fmtUSD(ebitdaRegimen/finca.trm)}</b>, lo que la haría valer alrededor de <b style={{ color:C.goldHi }}>{fmtUSD(evFinal/finca.trm)}</b>.
-                  {modo==="avanzado"&&<> Conservando el {fmtPct(tuPart)}, tu parte valdría <b style={{ color:C.frond }}>{fmtUSD(tuValor/finca.trm)}</b>{controlOk?", con control accionario garantizado mediante voto múltiple.":", pero perderías la mayoría: considera voto múltiple."}</>}
-                  {evFinal/finca.trm>=500e6&&<><br/><span style={{ color:C.goldHi, fontWeight:700 }}>★ Supera el umbral de USD 500M de valoración.</span></>}
+                <div style={{fontSize:14,color:C.dimHi,lineHeight:1.8}}>
+                  Con <b style={{color:C.goldHi}}>{fmtFull(haTot)} ha</b> en {nucleos.length} fincas más la extractora, la empresa generaría un <Term def={GLOSARIO.EBITDA}>EBITDA</Term> en régimen de <b style={{color:C.frond}}>{fmtUSD(ebitdaRegimen/finca.trm)}</b>, lo que la haría valer alrededor de <b style={{color:C.goldHi}}>{fmtUSD(evFinal/finca.trm)}</b>.
+                  {modo==="avanzado"&&<> Conservando el {fmtPct(tuPart)}, tu parte valdría <b style={{color:C.frond}}>{fmtUSD(tuValor/finca.trm)}</b>{controlOk?", con control accionario garantizado mediante voto múltiple.":", pero perderías la mayoría: considera voto múltiple."}</>}
+                  {evFinal/finca.trm>=500e6&&<><br/><span style={{color:C.goldHi,fontWeight:700}}>★ Supera el umbral de USD 500M de valoración.</span></>}
                 </div>
               </Card>
             </div>
@@ -552,58 +738,46 @@ function App() {
 
         {/* ====== CAPITAL (avanzado) ====== */}
         {tab==="capital"&&<>
-          <div className="kpi-row" style={{ display:"flex", gap:12, flexWrap:"wrap", marginBottom:22 }}>
-            <KPI label="Valoración (EV)"   value={fmtUSD(evFinal/finca.trm)} accent={C.goldHi} big/>
-            <KPI label="Tu participación"  value={fmtPct(tuPart)} accent={controlOk?C.frond:C.red}/>
-            <KPI label="Valor de tu parte" value={fmtUSD(tuValor/finca.trm)} accent={C.frond} big/>
+          <div className="kpi-row" style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:22}}>
+            <KPI label="Valoración (EV)"    value={fmtUSD(evFinal/finca.trm)}  accent={C.goldHi} big/>
+            <KPI label="Tu participación"   value={fmtPct(tuPart)}              accent={controlOk?C.frond:C.red}/>
+            <KPI label="Valor de tu parte"  value={fmtUSD(tuValor/finca.trm)}  accent={C.frond}  big/>
             <KPI label="Control accionario" value={controlOk?"Mantenido":"PERDIDO"} accent={controlOk?C.frond:C.red}/>
           </div>
-          <div className="grid2" style={{ display:"grid", gridTemplateColumns:"350px 1fr", gap:18 }}>
+          <div className="grid2" style={{display:"grid",gridTemplateColumns:"350px 1fr",gap:18}}>
             <SidePanel title="Salida y capital">
               <Slider label="Múltiplo de salida" sub="EV / EBITDA" value={cap.multiplo} min={4} max={12} step={0.5} onChange={setC("multiplo")} format={v=>`${v.toFixed(1)}x`}/>
               <Slider label="Piso EV por hectárea" sub="USD/ha" value={cap.evHa} min={6000} max={22000} step={1000} onChange={setC("evHa")} format={fmtFull}/>
               <Slider label="Dilución acumulada" value={cap.dilucion} min={0} max={0.7} step={0.01} onChange={setC("dilucion")} format={fmtPct}/>
-              <div style={{ marginTop:12, padding:"13px 16px",
-                background:controlOk?C.frondSoft:"rgba(217,107,82,0.12)",
-                borderRadius:10, border:`1px solid ${controlOk?C.frond:C.red}`,
-                fontSize:13, color:controlOk?C.frond:C.red, fontWeight:600, lineHeight:1.6 }}>
-                {controlOk
-                  ?`Conservas ${fmtPct(tuPart)} económico. Con voto múltiple, más de 50% de votos aun diluyéndote.`
-                  :`Con ${fmtPct(tuPart)} perderías la mayoría. Necesitas voto múltiple o limitar la dilución.`}
+              <div style={{marginTop:12,padding:"13px 16px",background:controlOk?C.frondSoft:C.redSoft,borderRadius:10,border:`1px solid ${controlOk?C.frond:C.red}`,fontSize:13,color:controlOk?C.frond:C.red,fontWeight:600,lineHeight:1.6}}>
+                {controlOk?`Conservas ${fmtPct(tuPart)} económico. Con voto múltiple, más de 50% de votos aun diluyéndote.`:`Con ${fmtPct(tuPart)} perderías la mayoría. Necesitas voto múltiple o limitar la dilución.`}
               </div>
             </SidePanel>
-
-            <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-              <Card title="Puente de valoración" accent={C.goldHi} right={<span style={{ fontSize:11, color:C.dim }}>el mayor método manda</span>}>
-                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+            <div style={{display:"flex",flexDirection:"column",gap:18}}>
+              <Card title="Puente de valoración" accent={C.goldHi} right={<span style={{fontSize:11,color:C.dim}}>el mayor método manda</span>}>
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
                   {[
                     ["EBITDA × múltiplo", valEbitda, `${fmtUSD(ebitdaRegimen/finca.trm)} × ${cap.multiplo}x`],
                     ["Piso por hectáreas", valHa,     `${fmtFull(haTot)} ha × USD ${fmtFull(cap.evHa)}`],
                     ["Valoración adoptada",evFinal,   "máximo de ambos métodos"],
-                  ].map(([l,v,sub],i)=>{
-                    const adopted=i===2;
-                    return <div key={i}>
-                      <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:5 }}>
-                        <span style={{ color:adopted?C.goldHi:C.dim, fontWeight:adopted?700:500 }}>{l}</span>
-                        <span style={{ fontFamily:"'JetBrains Mono',monospace", color:adopted?C.goldHi:C.ink, fontWeight:700 }}>{fmtUSD(v/finca.trm)}</span>
+                  ].map(([l,v,sub],i)=>{const adopted=i===2;return(
+                    <div key={i}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}>
+                        <span style={{color:adopted?C.goldHi:C.dim,fontWeight:adopted?700:500}}>{l}</span>
+                        <span style={{fontFamily:"'JetBrains Mono',monospace",color:adopted?C.goldHi:C.ink,fontWeight:700}}>{fmtUSD(v/finca.trm)}</span>
                       </div>
-                      <div style={{ height:7, background:C.panel2, borderRadius:4, overflow:"hidden" }}>
-                        <div style={{ width:`${(v/evFinal)*100}%`, height:"100%", background:adopted?C.gold:C.frond, opacity:adopted?1:0.45 }}/>
-                      </div>
-                      <div style={{ fontSize:10, color:C.dim, marginTop:3 }}>{sub}</div>
-                    </div>;
-                  })}
+                      <div style={{height:7,background:C.panel2,borderRadius:4,overflow:"hidden"}}><div style={{width:`${(v/evFinal)*100}%`,height:"100%",background:adopted?C.gold:C.frond,opacity:adopted?1:0.45}}/></div>
+                      <div style={{fontSize:10,color:C.dim,marginTop:3}}>{sub}</div>
+                    </div>
+                  );})}
                 </div>
               </Card>
-
               <Card title="Reparto del valor a la salida" accent={C.gold}>
-                <div style={{ display:"flex", height:50, borderRadius:9, overflow:"hidden", border:`1px solid ${C.line}` }}>
-                  <div style={{ width:`${tuPart*100}%`, background:`linear-gradient(90deg,${C.gold},${C.goldHi})`,
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    color:"#06120E", fontWeight:800, fontSize:13, fontFamily:"'JetBrains Mono',monospace" }}>Tú {fmtPct(tuPart)}</div>
-                  <div style={{ flex:1, background:C.panel2, display:"flex", alignItems:"center", justifyContent:"center", color:C.dim, fontSize:12 }}>Inversionistas</div>
+                <div style={{display:"flex",height:50,borderRadius:9,overflow:"hidden",border:`1px solid ${C.line}`}}>
+                  <div style={{width:`${tuPart*100}%`,background:`linear-gradient(90deg,${C.gold},${C.goldHi})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#06120E",fontWeight:800,fontSize:13,fontFamily:"'JetBrains Mono',monospace"}}>Tú {fmtPct(tuPart)}</div>
+                  <div style={{flex:1,background:C.panel2,display:"flex",alignItems:"center",justifyContent:"center",color:C.dim,fontSize:12}}>Inversionistas</div>
                 </div>
-                {evFinal/finca.trm>=500e6&&<div style={{ marginTop:12, padding:"9px 14px", background:C.goldSoft, borderRadius:8, fontSize:12, color:C.goldHi, fontWeight:700 }}>★ Cruzaste el umbral de USD 500M.</div>}
+                {evFinal/finca.trm>=500e6&&<div style={{marginTop:12,padding:"9px 14px",background:C.goldSoft,borderRadius:8,fontSize:12,color:C.goldHi,fontWeight:700}}>★ Cruzaste el umbral de USD 500M.</div>}
               </Card>
             </div>
           </div>
@@ -612,23 +786,20 @@ function App() {
         {/* ====== GLOSARIO ====== */}
         {tab==="glosario"&&(
           <div>
-            <div style={{ fontSize:13, color:C.dim, marginBottom:20, lineHeight:1.7 }}>
-              Términos clave del negocio palmero. Pasa el cursor sobre los términos subrayados en cualquier módulo para ver su definición.
-            </div>
-            <div className="grid2" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div style={{fontSize:13,color:C.dim,marginBottom:20,lineHeight:1.7}}>Términos clave del negocio palmero. Pasa el cursor sobre los términos subrayados en cualquier módulo para ver su definición.</div>
+            <div className="grid2" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               {Object.entries(GLOSARIO).map(([term,def])=>(
-                <div key={term} style={{ background:C.panel, border:`1px solid ${C.line}`, borderRadius:12, padding:"16px 18px", boxShadow:C.shadowSm }}>
-                  <div style={{ fontSize:14, fontWeight:800, color:C.goldHi, marginBottom:6, fontFamily:"'Archivo',sans-serif" }}>{term}</div>
-                  <div style={{ fontSize:13, color:C.dimHi, lineHeight:1.7 }}>{def}</div>
+                <div key={term} style={{background:C.panel,border:`1px solid ${C.line}`,borderRadius:12,padding:"16px 18px",boxShadow:C.shadowSm}}>
+                  <div style={{fontSize:14,fontWeight:800,color:C.goldHi,marginBottom:6,fontFamily:"'Archivo',sans-serif"}}>{term}</div>
+                  <div style={{fontSize:13,color:C.dimHi,lineHeight:1.7}}>{def}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Footer */}
-        <div style={{ marginTop:36, fontSize:11, color:C.dim, lineHeight:1.7, borderTop:`1px solid ${C.line}`, paddingTop:16, display:"flex", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-          <span><b style={{ color:C.dimHi }}>GVC Capital</b> · Mauricio Gutiérrez · Valledupar, Cesar — Colombia</span>
+        <div style={{marginTop:36,fontSize:11,color:C.dim,lineHeight:1.7,borderTop:`1px solid ${C.line}`,paddingTop:16,display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <span><b style={{color:C.dimHi}}>GVC Capital</b> · Mauricio Gutiérrez · Valledupar, Cesar — Colombia</span>
           <span>Valores Fedepalma/Cenipalma (ICPA 2024) · indicativos · no constituyen recomendación de inversión · © {new Date().getFullYear()}</span>
         </div>
       </div>
